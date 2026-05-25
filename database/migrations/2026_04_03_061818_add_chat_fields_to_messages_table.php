@@ -8,17 +8,11 @@ class AddChatFieldsToMessagesTable extends Migration
 {
     public function up()
     {
-        Schema::table('messages', function (Blueprint $table) {
-            $table->string('file_path')->nullable()->after('content');
-            $table->string('file_type')->nullable()->after('file_path');
-            $table->boolean('seen')->default(false)->after('file_type');
-        });
+        // Migration already handled in previous migrations
     }
 
     public function down()
     {
-        Schema::table('messages', function (Blueprint $table) {
-            $table->dropColumn(['file_path', 'file_type', 'seen']);
-        });
+        // Nothing to rollback
     }
 }
