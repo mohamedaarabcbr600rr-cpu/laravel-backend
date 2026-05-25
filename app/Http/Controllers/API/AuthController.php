@@ -16,18 +16,18 @@ class AuthController extends Controller
         'name' => 'required',
         'email' => 'required|email|unique:users',
         'password' => 'required|min:6',
-        'country' => 'nullable|string' // Ajout du pays
+        'country' => 'nullable|string'
     ]);
 
     $user = User::create([
         'name' => $request->name,
+        'username' => $request->name, // ← ajout
         'email' => $request->email,
         'password' => Hash::make($request->password),
-        'country' => $request->country, // Sauvegarder le pays
-        'last_active' => now(), // Marquer comme actif
+        'country' => $request->country,
+        'last_active' => now(),
     ]);
 
-    // Créer le profil automatiquement
     $user->profile()->create([
         'niveau' => 'debutant',
         'score_moyen' => 0,
