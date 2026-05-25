@@ -8,15 +8,11 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::table('messages', function (Blueprint $table) {
-            $table->boolean('seen')->default(false);
-        });
+        // already handled in create_messages_table
     }
 
     public function down()
     {
-        Schema::table('messages', function (Blueprint $table) {
-            $table->dropColumn('seen');
-        });
+        // nothing to rollback
     }
 };
