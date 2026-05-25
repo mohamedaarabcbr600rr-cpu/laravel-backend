@@ -60,7 +60,7 @@ class ProfileController extends Controller
             
             // Stocker la nouvelle photo
             $path = $request->file('profile_pic')->store('profile-pictures', 'public');
-            $user->profile_pic = Storage::url($path);
+            $user->profile_pic = '/storage/' . $path;
         }
         
         $user->save();
