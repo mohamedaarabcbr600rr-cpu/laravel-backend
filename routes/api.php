@@ -279,6 +279,8 @@ Route::middleware('api')->group(function () {
 
 });
 
+Route::get('/messages/unread-count', [MessageController::class, 'unreadCount']);
+
 // AI Routes
 
 
