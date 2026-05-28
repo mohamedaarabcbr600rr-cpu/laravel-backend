@@ -280,7 +280,7 @@ Route::middleware('api')->group(function () {
 });
 
 Route::get('/messages/unread-count', [MessageController::class, 'unreadCount']);
-
+Route::get('/messages/conversations', [MessageController::class, 'getConversations']);
 // AI Routes
 
 
