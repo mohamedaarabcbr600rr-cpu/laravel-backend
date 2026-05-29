@@ -235,15 +235,15 @@ class MessageController extends Controller
     public function unreadCount()
 {
     $userId = auth()->id();
-    
+
     $count = \App\Models\Message::where('seen', false)
         ->where('user_id', '!=', $userId)
         ->whereHas('conversation', function($q) use ($userId) {
-            $q->where('user1_id', $userId)
-              ->orWhere('user2_id', $userId);
+            $q->where('user_one', $userId)   // ← was user1_id
+              ->orWhere('user_two', $userId); // ← was user2_id
         })
         ->count();
-    
+
     return response()->json(['unread_count' => $count]);
 }
 

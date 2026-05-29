@@ -140,10 +140,10 @@ Route::middleware('auth:sanctum')->group(function () {
 //notifications 
 // routes/api.php
 Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']); // ← FIRST
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
-    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
 });
 
 
