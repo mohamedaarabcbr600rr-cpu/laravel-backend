@@ -251,21 +251,21 @@ public function getConversations()
 {
     $userId = auth()->id();
     
-    $conversations = \App\Models\Conversation::where('user1_id', $userId)
-        ->orWhere('user2_id', $userId)
-        ->with(['messages' => function($q) {
-            $q->latest()->limit(1);
-        }])
-        ->get()
-        ->map(function($conv) use ($userId) {
-            $otherId = $conv->user1_id === $userId ? $conv->user2_id : $conv->user1_id;
-            $unread = $conv->messages()->where('user_id', '!=', $userId)->where('seen', false)->count();
-            return [
-                'conversation_id' => $conv->id,
-                'other_user_id' => $otherId,
-                'unread_count' => $unread,
-            ];
-        });
+    $conversations = \App\Models\Conversation::where('user_one', $userId)
+    ->orWhere('user_two', $userId)
+    ->get()
+    ->map(function($conv) use ($userId) {
+        $otherId = $conv->user_one === $userId ? $conv->user_two : $conv->user_one;
+        $unread = \App\Models\Message::where('conversation_id', $conv->id)
+            ->where('user_id', '!=', $userId)
+            ->where('seen', false)
+            ->count();
+        return [
+            'conversation_id' => $conv->id,
+            'other_user_id' => $otherId,
+            'unread_count' => $unread,
+        ];
+    });
     
     return response()->json($conversations);
 }

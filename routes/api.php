@@ -154,133 +154,22 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
-
-
-/*
-|--------------------------------------------------------------------------
-| Messages API Routes
-|--------------------------------------------------------------------------
-|
-| All routes are prefixed with /api and protected by 'api' middleware
-|
-*/
-
-Route::middleware('api')->group(function () {
-
-    /*
-    |--------------------------------------------------------------------------
-    | Conversations
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Create or get conversation between two users
-     * POST /api/messages/conversations
-     *
-     * @body user_id       (int)    Required - The recipient user ID
-     * @body auth_user_id  (int)    Required - The authenticated user ID
-     *
-     * @response { id: int, other_user: User }
-     */
+Route::middleware('auth:sanctum')->group(function () {
+    // ← Ajoute ici AVANT les routes {id}
+    Route::get('/messages/unread-count', [MessageController::class, 'unreadCount']);
+    Route::get('/messages/conversations', [MessageController::class, 'getConversations']);
     Route::post('/messages/conversations', [MessageController::class, 'createConversation']);
-
-    /*
-    |--------------------------------------------------------------------------
-    | Messages
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Send a new message (text + image)
-     * POST /api/messages/{conversationId}
-     *
-     * @body user_id   (int)      Required - Sender user ID
-     * @body content   (string)   Optional - Message text
-     * @body file      (file)     Optional - Image file (max 10MB)
-     *
-     * @response Message with user relation
-     */
+    
+    // Routes avec {id} après
     Route::post('/messages/{id}', [MessageController::class, 'sendMessage']);
-
-    /**
-     * Get all messages in a conversation
-     * GET /api/messages/{conversationId}
-     *
-     * @response Array of Message objects with user relation
-     */
     Route::get('/messages/{id}', [MessageController::class, 'getMessages']);
-
-    /**
-     * Update/edit a message
-     * PUT /api/messages/{messageId}
-     *
-     * @body content (string) Required - New message content
-     *
-     * @response Updated Message object
-     */
     Route::put('/messages/{id}', [MessageController::class, 'updateMessage']);
-
-    /**
-     * Delete a message
-     * DELETE /api/messages/{messageId}
-     *
-     * @response { success: true }
-     */
     Route::delete('/messages/{id}', [MessageController::class, 'deleteMessage']);
-
-    /**
-     * Mark all messages in conversation as seen
-     * POST /api/messages/{conversationId}/seen
-     *
-     * @body user_id (int) Required - User marking as seen
-     *
-     * @response { success: true }
-     */
     Route::post('/messages/{id}/seen', [MessageController::class, 'markAsSeen']);
-
-    /*
-    |--------------------------------------------------------------------------
-    | Typing Indicator
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Get typing status
-     * GET /api/messages/{conversationId}/typing
-     *
-     * @response { is_typing: bool, user_id: int|null }
-     */
     Route::get('/messages/{id}/typing', [MessageController::class, 'getTyping']);
-
-    /**
-     * Set typing status
-     * POST /api/messages/{conversationId}/typing
-     *
-     * @body user_id    (int)  Required - User who is typing
-     * @body is_typing  (bool) Required - Typing status
-     *
-     * @response { ok: true }
-     */
     Route::post('/messages/{id}/typing', [MessageController::class, 'setTyping']);
-
-    /*
-    |--------------------------------------------------------------------------
-    | Connections (Users)
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Get all users with online status
-     * GET /api/connections
-     *
-     * @response Array of { id, name, last_seen, online }
-     */
     Route::get('/connections', [MessageController::class, 'getConnections']);
-
 });
-
-Route::get('/messages/unread-count', [MessageController::class, 'unreadCount']);
-Route::get('/messages/conversations', [MessageController::class, 'getConversations']);
 // AI Routes
 
 
