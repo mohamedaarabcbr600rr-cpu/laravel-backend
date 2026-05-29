@@ -23,35 +23,49 @@ public function toggle(Request $request, $id)
     $reactionType = $request->input('reaction_type', 'like');
 
     $validTypes = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
-
     if (!in_array($reactionType, $validTypes)) {
         $reactionType = 'like';
     }
 
     $experience = Experience::findOrFail($id);
 
-    // 👉 supprime SEULEMENT la réaction de cet user sur ce post
+    // Vérifie si la même réaction existe déjà
+    $existing = Like::where('user_id', $user->id)
+        ->where('experience_id', $id)
+        ->first();
+
+    // Toggle off si même réaction
+    if ($existing && $existing->reaction_type === $reactionType) {
+        $existing->delete();
+        return response()->json(['status' => 'unliked']);
+    }
+
+    // Supprime l'ancienne réaction et crée la nouvelle
     Like::where('user_id', $user->id)
         ->where('experience_id', $id)
         ->delete();
 
-    // 👉 si même réaction → toggle off
-    $existingSame = Like::where('user_id', $user->id)
-        ->where('experience_id', $id)
-        ->where('reaction_type', $reactionType)
-        ->first();
-
-    if ($existingSame) {
-        $existingSame->delete();
-        return response()->json(['status' => 'unliked']);
-    }
-
-    // 👉 create new reaction
     Like::create([
         'user_id' => $user->id,
         'experience_id' => $id,
         'reaction_type' => $reactionType
     ]);
+
+    // ✅ ENVOIE LA NOTIFICATION (seulement si ce n'est pas son propre post)
+    if ($experience->user_id !== $user->id) {
+        $experience->user->notify(new AppNotification([
+            'type' => 'like',
+            'actor_id' => $user->id,
+            'actor_name' => $user->name,
+            'actor_avatar' => $user->profile_pic
+                ? asset('storage/' . str_replace('storage/', '', $user->profile_pic))
+                : null,
+            'experience_id' => $experience->id,
+            'post_title' => $experience->title ?? 'Publication',
+            'message' => '👍 a aimé votre publication',
+            'reaction_type' => $reactionType
+        ]));
+    }
 
     return response()->json([
         'status' => 'liked',
