@@ -7,11 +7,13 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        'http://localhost:5133',   // React (Vite)
+        'http://localhost:5133',
         'http://127.0.0.1:5133',
-        'http://localhost:8000',   // Laravel نفسه
-        'https://react-frontend-production-b8cd.up.railway.app', // React (Railway)
-        ],
+        'http://localhost:8000',
+        'https://react-frontend-production-b8cd.up.railway.app',
+        'https://studmo.com',       // ✅ nouveau
+        'https://www.studmo.com',   // ✅ nouveau
+    ],
 
     'allowed_origins_patterns' => [],
 
