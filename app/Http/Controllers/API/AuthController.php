@@ -37,7 +37,9 @@ class AuthController extends Controller
     ]);
 
     // ✅ Envoyer email de vérification
+    dispatch(function() use ($user) {
     $user->sendEmailVerificationNotification();
+})->afterResponse();
 
     return response()->json([
         'message' => 'Inscription réussie ! Vérifie ton email pour activer ton compte.',
