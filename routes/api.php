@@ -42,21 +42,6 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-// ✅ Vérification email
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
-
-Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
-    $request->fulfill();
-    return redirect(env('FRONTEND_URL') . '?verified=1');
-})->middleware(['auth:sanctum', 'signed'])->name('verification.verify');
-
-Route::post('/email/resend', function (Request $request) {
-    $request->user()->sendEmailVerificationNotification();
-    return response()->json(['message' => 'Email de vérification envoyé !']);
-})->middleware(['auth:sanctum', 'throttle:6,1']);
-
-
-
 Route::get('/experiences', [ExperienceController::class,'index']);
 
 /*
