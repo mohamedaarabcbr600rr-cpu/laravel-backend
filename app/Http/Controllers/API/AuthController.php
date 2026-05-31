@@ -21,7 +21,7 @@ class AuthController extends Controller
 
     $user = User::create([
         'name' => $request->name,
-        'username' => $request->name, // ← ajout
+        'username' => $request->name,
         'email' => $request->email,
         'password' => Hash::make($request->password),
         'country' => $request->country,
@@ -36,12 +36,13 @@ class AuthController extends Controller
         'points_forts' => json_encode([]),
     ]);
 
-    $token = $user->createToken('talib_token')->plainTextToken;
+    // ✅ Envoyer email de vérification
+    $user->sendEmailVerificationNotification();
 
     return response()->json([
-        'user' => $user,
-        'token' => $token
-    ]);
+        'message' => 'Inscription réussie ! Vérifie ton email pour activer ton compte.',
+        'email_sent' => true
+    ], 201);
 }
 
     public function login(Request $request)
@@ -51,11 +52,18 @@ class AuthController extends Controller
     }
 
     $user = Auth::user();
-    
-    // 👇 AJOUTEZ CES 2 LIGNES POUR METTRE À JOUR last_active
+
+    // ✅ Vérifier si email est vérifié
+    if (!$user->hasVerifiedEmail()) {
+        return response()->json([
+            'message' => 'Veuillez vérifier votre email avant de vous connecter.',
+            'email_verified' => false
+        ], 403);
+    }
+
     $user->last_active = now();
     $user->save();
-    
+
     $token = $user->createToken('talib_token')->plainTextToken;
 
     return response()->json([
