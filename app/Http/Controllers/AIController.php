@@ -17,9 +17,9 @@ class AIController extends Controller
     public function askAI(Request $request, AIService $ai)
     {
         $request->validate(['message' => 'required|string|max:2000']);
-        
+
         $lang = $this->detectLanguage(substr($request->message, 0, 1000));
-        
+
         try {
             $user = auth()->user();
             $niveau = 'intermediaire';
@@ -86,9 +86,9 @@ TEXT:
 " . substr($text, 0, 8000);
                     $summary = $ai->ask($prompt);
 
-                // 3️⃣ Si texte vide (PDF scanné/images) → Gemini Vision
+                // 3️⃣ Si texte vide (PDF scanné/images) → OpenRouter Vision d'abord, Gemini en fallback
                 } else {
-                    \Log::info('PDF has no text, using Gemini Vision...');
+                    \Log::info('PDF has no text, using Vision fallback chain...');
                     $prompt = "
 You are a professional summarizer.
 IMPORTANT:
@@ -104,7 +104,7 @@ FORMAT:
 3. Conclusion
 ";
                     try {
-                        $summary = $ai->askGeminiWithFile($prompt, $file->path());
+                        $summary = $ai->askWithFile($prompt, $file->path());
                     } catch (\Exception $e) {
                         return response()->json([
                             'success' => false,
@@ -181,7 +181,7 @@ TEXT:
                     \Log::warning('PDF parser failed: ' . $e->getMessage());
                 }
 
-                // 2️⃣ Si texte extrait → Groq (rapide et fiable)
+                // 2️⃣ Si texte extrait → Groq
                 if (!empty(trim($text)) && strlen(trim($text)) > 100) {
                     $lang = $this->detectLanguage(substr($text, 0, 1000));
                     $prompt = "
@@ -209,9 +209,9 @@ TEXT:
 " . substr($text, 0, 8000);
                     $response = $ai->ask($prompt);
 
-                // 3️⃣ Si PDF scanné/images → Gemini Vision
+                // 3️⃣ Si PDF scanné/images → OpenRouter Vision d'abord, Gemini en fallback
                 } else {
-                    \Log::info('PDF has no text, using Gemini Vision...');
+                    \Log::info('PDF has no text, using Vision fallback chain...');
                     $prompt = "
 You are an AI exam generator.
 CRITICAL RULES:
@@ -235,7 +235,7 @@ FORMAT EXACTLY:
 }
 ";
                     try {
-                        $response = $ai->askGeminiWithFile($prompt, $file->path());
+                        $response = $ai->askWithFile($prompt, $file->path());
                     } catch (\Exception $e) {
                         return response()->json([
                             'success' => false,

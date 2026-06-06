@@ -56,7 +56,53 @@ class AIService
     }
 
     /**
-     * 🔥 Lire PDF avec Gemini Vision (supporte arabe, images, etc.)
+     * 📄 Lire PDF/image via OpenRouter (Qwen Vision) — principal pour PDFs scannés
+     */
+    public function askWithFileViaOpenRouter($prompt, $filePath, $mimeType = 'application/pdf')
+    {
+        if (!$this->openRouterApiKey) {
+            throw new \Exception('OpenRouter API key not configured');
+        }
+
+        $fileContent = base64_encode(file_get_contents($filePath));
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $this->openRouterApiKey,
+            'Content-Type'  => 'application/json',
+        ])->timeout(180)->post('https://openrouter.ai/api/v1/chat/completions', [
+            "model" => "qwen/qwen2.5-vl-72b-instruct:free",
+            "messages" => [
+                [
+                    "role" => "user",
+                    "content" => [
+                        [
+                            "type" => "text",
+                            "text" => $prompt
+                        ],
+                        [
+                            "type" => "image_url",
+                            "image_url" => [
+                                "url" => "data:{$mimeType};base64,{$fileContent}"
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            "temperature" => 0.3,
+            "max_tokens"  => 4000
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('OpenRouter Vision error: ' . $response->body());
+            throw new \Exception("OpenRouter Vision API error: " . $response->status());
+        }
+
+        $result = $response->json();
+        return $result['choices'][0]['message']['content'] ?? "No response.";
+    }
+
+    /**
+     * 🔥 Lire PDF avec Gemini Vision — fallback si OpenRouter échoue
      */
     public function askGeminiWithFile($prompt, $filePath)
     {
@@ -68,7 +114,7 @@ class AIService
         $mimeType = 'application/pdf';
 
         $response = Http::timeout(180)->post(
-"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
             [
                 "contents" => [
                     [
@@ -99,6 +145,34 @@ class AIService
 
         $result = $response->json();
         return $result['candidates'][0]['content']['parts'][0]['text'] ?? "No response.";
+    }
+
+    /**
+     * 📄 Méthode unifiée pour lire un fichier — OpenRouter d'abord, Gemini en fallback
+     */
+    public function askWithFile($prompt, $filePath)
+    {
+        // 1️⃣ OpenRouter Vision (Qwen) — gratuit, pas de limite stricte
+        if ($this->openRouterApiKey) {
+            try {
+                Log::info('Tentative Vision avec OpenRouter (Qwen)...');
+                return $this->askWithFileViaOpenRouter($prompt, $filePath);
+            } catch (\Exception $e) {
+                Log::warning('OpenRouter Vision failed: ' . $e->getMessage());
+            }
+        }
+
+        // 2️⃣ Gemini Vision — fallback
+        if ($this->geminiApiKey) {
+            try {
+                Log::info('Tentative Vision avec Gemini...');
+                return $this->askGeminiWithFile($prompt, $filePath);
+            } catch (\Exception $e) {
+                Log::error('Gemini Vision failed: ' . $e->getMessage());
+            }
+        }
+
+        throw new \Exception('Aucun service Vision disponible. PDF illisible.');
     }
 
     /**
@@ -165,7 +239,7 @@ class AIService
     private function askGemini($prompt)
     {
         $response = Http::timeout(120)->post(
-"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
             [
                 "contents" => [
                     [
