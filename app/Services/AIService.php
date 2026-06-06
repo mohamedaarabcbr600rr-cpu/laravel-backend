@@ -68,7 +68,7 @@ class AIService
         $mimeType = 'application/pdf';
 
         $response = Http::timeout(180)->post(
-"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=" . $this->geminiApiKey,
+"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
             [
                 "contents" => [
                     [
@@ -165,7 +165,7 @@ class AIService
     private function askGemini($prompt)
     {
         $response = Http::timeout(120)->post(
-"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" . $this->geminiApiKey,
+"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
             [
                 "contents" => [
                     [
