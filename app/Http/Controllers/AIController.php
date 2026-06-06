@@ -43,7 +43,7 @@ Question: {$request->message}
     }
 
     /**
-     * 📄 Generate Summary — supporte tous les PDFs avec Gemini Vision
+     * 📄 Generate Summary
      */
     public function generateSummary(Request $request, AIService $ai)
     {
@@ -55,30 +55,65 @@ Question: {$request->message}
             $file = $request->file('file');
             $ext = strtolower($file->getClientOriginalExtension());
 
-            // ✅ PDF → utiliser Gemini Vision directement
             if ($ext === 'pdf') {
-                $prompt = "
-You are a professional summarizer.
+                // 1️⃣ Essayer d'extraire le texte avec smalot
+                $text = '';
+                try {
+                    $parser = new Parser();
+                    $pdf = $parser->parseFile($file->path());
+                    $text = $pdf->getText();
+                } catch (\Exception $e) {
+                    \Log::warning('PDF parser failed: ' . $e->getMessage());
+                }
 
-IMPORTANT RULES:
-- Detect the language of the document automatically
-- Respond ONLY in the SAME language as the document
-- Arabic PDF → Arabic summary
-- French PDF → French summary
-- English PDF → English summary
-- Spanish PDF → Spanish summary
-- Never translate, keep the original language
+                // 2️⃣ Si texte extrait → Groq (rapide)
+                if (!empty(trim($text)) && strlen(trim($text)) > 100) {
+                    $lang = $this->detectLanguage(substr($text, 0, 1000));
+                    $prompt = "
+You are a professional summarizer.
+RULES:
+- Respond ONLY in language: {$lang}
+- Never translate
+- Keep original language
 
 TASK: Create a clear structured summary.
-
 FORMAT:
 1. Introduction
-2. Key Points  
+2. Key Points
+3. Conclusion
+
+TEXT:
+" . substr($text, 0, 8000);
+                    $summary = $ai->ask($prompt);
+
+                // 3️⃣ Si texte vide (PDF scanné/images) → Gemini Vision
+                } else {
+                    \Log::info('PDF has no text, using Gemini Vision...');
+                    $prompt = "
+You are a professional summarizer.
+IMPORTANT:
+- Detect the language of the document automatically
+- Respond ONLY in the SAME language as the document
+- Arabic → Arabic, French → French, English → English
+- Never translate
+
+TASK: Create a clear structured summary.
+FORMAT:
+1. Introduction
+2. Key Points
 3. Conclusion
 ";
-                $summary = $ai->askGeminiWithFile($prompt, $file->path());
-                $lang = $this->detectLanguage(substr($summary, 0, 500));
+                    try {
+                        $summary = $ai->askGeminiWithFile($prompt, $file->path());
+                    } catch (\Exception $e) {
+                        return response()->json([
+                            'success' => false,
+                            'error' => 'PDF illisible. Essayez un PDF avec du texte sélectionnable.'
+                        ], 400);
+                    }
+                }
 
+                $lang = $this->detectLanguage(substr($summary, 0, 500));
                 return response()->json([
                     'success' => true,
                     'language_detected' => $lang,
@@ -86,24 +121,20 @@ FORMAT:
                 ], 200, [], JSON_UNESCAPED_UNICODE);
             }
 
-            // ✅ TXT / DOC / DOCX → extraire le texte puis envoyer à l'IA
+            // ✅ TXT / DOC / DOCX
             $text = $this->extractTextFromFile($file);
-
             if (empty(trim($text))) {
                 return response()->json(['success' => false, 'error' => 'Fichier vide ou illisible'], 400);
             }
 
             $lang = $this->detectLanguage(substr($text, 0, 1000));
-
             $prompt = "
 You are a professional summarizer.
-
 RULES:
 - Respond ONLY in language: {$lang}
 - Never translate
 
 TASK: Create a structured summary.
-
 FORMAT:
 1. Introduction
 2. Key Points
@@ -113,7 +144,6 @@ TEXT:
 " . substr($text, 0, 8000);
 
             $summary = $ai->ask($prompt);
-
             return response()->json([
                 'success' => true,
                 'language_detected' => $lang,
@@ -127,7 +157,7 @@ TEXT:
     }
 
     /**
-     * ❓ Generate QCM — supporte tous les PDFs avec Gemini Vision
+     * ❓ Generate QCM
      */
     public function generateQCM(Request $request, AIService $ai)
     {
@@ -138,54 +168,28 @@ TEXT:
         try {
             $file = $request->file('file');
             $ext = strtolower($file->getClientOriginalExtension());
+            $response = '';
 
-            // ✅ PDF → utiliser Gemini Vision directement
             if ($ext === 'pdf') {
-                $prompt = "
-You are an AI exam generator.
-
-CRITICAL RULES:
-- Detect the language of the document automatically
-- Generate ALL questions in the SAME language as the document
-- Arabic PDF → Arabic questions
-- French PDF → French questions
-- English PDF → English questions
-- Spanish PDF → Spanish questions
-- NEVER translate or mix languages
-- Return ONLY valid JSON, nothing else
-
-TASK: Generate 20 multiple choice questions.
-
-FORMAT EXACTLY:
-{
-  \"title\": \"...\",
-  \"questions\": [
-    {
-      \"question\": \"...\",
-      \"options\": [\"A) ...\", \"B) ...\", \"C) ...\", \"D) ...\"],
-      \"correct\": \"A\"
-    }
-  ]
-}
-";
-                $response = $ai->askGeminiWithFile($prompt, $file->path());
-
-            } else {
-                // ✅ TXT / DOC / DOCX
-                $text = $this->extractTextFromFile($file);
-
-                if (empty(trim($text))) {
-                    return response()->json(['success' => false, 'error' => 'Fichier vide ou illisible'], 400);
+                // 1️⃣ Essayer d'extraire le texte avec smalot
+                $text = '';
+                try {
+                    $parser = new Parser();
+                    $pdf = $parser->parseFile($file->path());
+                    $text = $pdf->getText();
+                } catch (\Exception $e) {
+                    \Log::warning('PDF parser failed: ' . $e->getMessage());
                 }
 
-                $lang = $this->detectLanguage(substr($text, 0, 1000));
-
-                $prompt = "
+                // 2️⃣ Si texte extrait → Groq (rapide et fiable)
+                if (!empty(trim($text)) && strlen(trim($text)) > 100) {
+                    $lang = $this->detectLanguage(substr($text, 0, 1000));
+                    $prompt = "
 You are an AI exam generator.
-
-RULES:
+CRITICAL RULES:
 - ALL content MUST be in language: {$lang}
-- Return ONLY valid JSON
+- NEVER use another language
+- Return ONLY valid JSON, no explanation
 
 TASK: Generate 20 multiple choice questions.
 
@@ -203,7 +207,71 @@ FORMAT EXACTLY:
 
 TEXT:
 " . substr($text, 0, 8000);
+                    $response = $ai->ask($prompt);
 
+                // 3️⃣ Si PDF scanné/images → Gemini Vision
+                } else {
+                    \Log::info('PDF has no text, using Gemini Vision...');
+                    $prompt = "
+You are an AI exam generator.
+CRITICAL RULES:
+- Detect the language of the document automatically
+- Generate ALL questions in the SAME language
+- Arabic PDF → Arabic questions
+- French PDF → French questions
+- English PDF → English questions
+- Return ONLY valid JSON, nothing else
+
+FORMAT EXACTLY:
+{
+  \"title\": \"...\",
+  \"questions\": [
+    {
+      \"question\": \"...\",
+      \"options\": [\"A) ...\", \"B) ...\", \"C) ...\", \"D) ...\"],
+      \"correct\": \"A\"
+    }
+  ]
+}
+";
+                    try {
+                        $response = $ai->askGeminiWithFile($prompt, $file->path());
+                    } catch (\Exception $e) {
+                        return response()->json([
+                            'success' => false,
+                            'error' => 'PDF illisible. Essayez un PDF avec du texte sélectionnable.'
+                        ], 400);
+                    }
+                }
+
+            } else {
+                // ✅ TXT / DOC / DOCX
+                $text = $this->extractTextFromFile($file);
+                if (empty(trim($text))) {
+                    return response()->json(['success' => false, 'error' => 'Fichier vide ou illisible'], 400);
+                }
+
+                $lang = $this->detectLanguage(substr($text, 0, 1000));
+                $prompt = "
+You are an AI exam generator.
+RULES:
+- ALL content MUST be in language: {$lang}
+- Return ONLY valid JSON
+
+FORMAT EXACTLY:
+{
+  \"title\": \"...\",
+  \"questions\": [
+    {
+      \"question\": \"...\",
+      \"options\": [\"A) ...\", \"B) ...\", \"C) ...\", \"D) ...\"],
+      \"correct\": \"A\"
+    }
+  ]
+}
+
+TEXT:
+" . substr($text, 0, 8000);
                 $response = $ai->ask($prompt);
             }
 
@@ -223,7 +291,6 @@ TEXT:
             }
 
             $lang = $this->detectLanguage($qcm['questions'][0]['question'] ?? '');
-
             return response()->json([
                 'success' => true,
                 'language_detected' => $lang,
@@ -262,7 +329,6 @@ TEXT:
         $avg = $profile->score_moyen ?? 0;
         $newTotal = $total + 1;
         $newAvg = (($avg * $total) + $request->score) / $newTotal;
-
         $niveau = $newAvg < 50 ? 'debutant' : ($newAvg < 75 ? 'intermediaire' : 'avance');
 
         $profile->update([
@@ -304,7 +370,6 @@ TEXT:
 
             $prompt = "
 You are a student AI coach. Respond in French.
-
 Student data:
 - Level: {$niveau}
 - Average score: {$avg}%
