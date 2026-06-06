@@ -23,10 +23,8 @@ class AIService
      */
     public function ask($prompt, $context = [])
     {
-        // Ajouter le contexte si présent
         $fullPrompt = $this->buildPrompt($prompt, $context);
 
-        // Essayer Groq d'abord (le plus rapide)
         if ($this->groqApiKey) {
             try {
                 Log::info('Tentative avec Groq...');
@@ -36,7 +34,6 @@ class AIService
             }
         }
 
-        // Fallback sur OpenRouter
         if ($this->openRouterApiKey) {
             try {
                 Log::info('Tentative avec OpenRouter...');
@@ -46,7 +43,6 @@ class AIService
             }
         }
 
-        // Fallback final sur Gemini
         if ($this->geminiApiKey) {
             try {
                 Log::info('Tentative avec Gemini...');
@@ -56,46 +52,89 @@ class AIService
             }
         }
 
-        // Si toutes les IA échouent
         throw new \Exception('Aucun service IA disponible');
     }
 
     /**
-     * 🚀 GROQ (principal - le plus rapide)
+     * 🔥 Lire PDF avec Gemini Vision (supporte arabe, images, etc.)
      */
-   private function askGroq($prompt)
-{
-    $response = Http::withHeaders([
-        'Authorization' => 'Bearer ' . $this->groqApiKey,
-        'Content-Type' => 'application/json',
-    ])->timeout(120)->post('https://api.groq.com/openai/v1/chat/completions', [
-        "model" => "llama-3.3-70b-versatile",
-        "messages" => [
-            [
-                "role" => "system",
-                "content" => "You must ALWAYS follow the exact language requested in the user prompt. Never change language." .
-                 " 
-                IMPORTANT: Always follow the language specified in the user's prompt."
-            ],
-            [
-                "role" => "user",
-                "content" => $prompt
-            ]
-        ],
-        "temperature" => 0.7,
-        "max_tokens" => 2000
-    ]);
+    public function askGeminiWithFile($prompt, $filePath)
+    {
+        if (!$this->geminiApiKey) {
+            throw new \Exception('Gemini API key not configured');
+        }
 
-    if (!$response->successful()) {
-        throw new \Exception("Groq API error: " . $response->status());
+        $fileContent = base64_encode(file_get_contents($filePath));
+        $mimeType = 'application/pdf';
+
+        $response = Http::timeout(180)->post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $this->geminiApiKey,
+            [
+                "contents" => [
+                    [
+                        "parts" => [
+                            [
+                                "inline_data" => [
+                                    "mime_type" => $mimeType,
+                                    "data" => $fileContent
+                                ]
+                            ],
+                            [
+                                "text" => $prompt
+                            ]
+                        ]
+                    ]
+                ],
+                "generationConfig" => [
+                    "temperature" => 0.3,
+                    "maxOutputTokens" => 4000
+                ]
+            ]
+        );
+
+        if (!$response->successful()) {
+            Log::error('Gemini Vision error: ' . $response->body());
+            throw new \Exception("Gemini Vision API error: " . $response->status());
+        }
+
+        $result = $response->json();
+        return $result['candidates'][0]['content']['parts'][0]['text'] ?? "No response.";
     }
 
-    $result = $response->json();
-    return $result['choices'][0]['message']['content'] ?? "No response";
-}
+    /**
+     * 🚀 GROQ
+     */
+    private function askGroq($prompt)
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $this->groqApiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(120)->post('https://api.groq.com/openai/v1/chat/completions', [
+            "model" => "llama-3.3-70b-versatile",
+            "messages" => [
+                [
+                    "role" => "system",
+                    "content" => "You must ALWAYS follow the exact language requested in the user prompt. Never change language."
+                ],
+                [
+                    "role" => "user",
+                    "content" => $prompt
+                ]
+            ],
+            "temperature" => 0.7,
+            "max_tokens" => 2000
+        ]);
+
+        if (!$response->successful()) {
+            throw new \Exception("Groq API error: " . $response->status());
+        }
+
+        $result = $response->json();
+        return $result['choices'][0]['message']['content'] ?? "No response";
+    }
 
     /**
-     * 🔀 OpenRouter (backup - accès à plusieurs modèles)
+     * 🔀 OpenRouter
      */
     private function askOpenRouter($prompt)
     {
@@ -121,12 +160,12 @@ class AIService
     }
 
     /**
-     * 🧠 Gemini (fallback final)
+     * 🧠 Gemini texte
      */
     private function askGemini($prompt)
     {
         $response = Http::timeout(120)->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" . $this->geminiApiKey,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $this->geminiApiKey,
             [
                 "contents" => [
                     [
@@ -151,7 +190,7 @@ class AIService
     }
 
     /**
-     * 🏗️ Construire le prompt avec contexte
+     * 🏗️ Construire le prompt
      */
     private function buildPrompt($prompt, $context = [])
     {
@@ -168,11 +207,10 @@ class AIService
     }
 
     /**
-     * 🔥 Version avec mémoire (conversation)
+     * 🔥 Version avec mémoire
      */
     public function askWithHistory($messages)
     {
-        // Pour Groq
         if ($this->groqApiKey) {
             try {
                 $response = Http::withHeaders([
@@ -191,7 +229,6 @@ class AIService
             }
         }
 
-        // Fallback: utiliser la méthode normale
         $lastMessage = end($messages);
         return $this->ask($lastMessage['content']);
     }
