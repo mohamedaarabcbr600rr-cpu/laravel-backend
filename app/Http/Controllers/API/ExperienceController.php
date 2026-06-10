@@ -171,7 +171,7 @@ class ExperienceController extends Controller
     /**
      * Supprimer une expérience
      */
-   public function destroy(Request $request, $id)
+  public function destroy(Request $request, $id)
 {
     $user = $request->user();
     if (!$user) {
@@ -191,10 +191,7 @@ class ExperienceController extends Controller
         Storage::disk('public')->delete($experience->media_path);
     }
 
-    // ✅ SUPPRIME LES NOTIFICATIONS LIÉES À CETTE EXPÉRIENCE
-    \App\Models\DatabaseNotification::where('data->experience_id', $id)->delete();
-    // Ou si tu utilises le modèle par défaut :
-    // \Illuminate\Notifications\DatabaseNotification::where('data->experience_id', $id)->delete();
+    \DB::table('notifications')->whereJsonContains('data->experience_id', (int)$id)->delete();
 
     $experience->delete();
 
