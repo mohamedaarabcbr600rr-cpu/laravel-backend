@@ -77,7 +77,6 @@ Route::middleware('auth:sanctum')->group(function() {
 Route::middleware('auth:sanctum')->group(function () {
 
     // Experiences
-    Route::get('/experiences', [ExperienceController::class, 'index']);
     Route::post('/experiences', [ExperienceController::class, 'store']);
     Route::get('/experiences/{id}', [ExperienceController::class, 'show']);
     Route::put('/experiences/{id}', [ExperienceController::class, 'update']);
