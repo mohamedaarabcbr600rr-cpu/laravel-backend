@@ -8,6 +8,17 @@ use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
+
+// ✅ Ajouter ici en premier
+    public function index()
+    {
+        $currentUser = Auth::user();
+        $users = User::when($currentUser, fn($q) => $q->where('id', '!=', $currentUser->id))
+            ->orderBy('name')
+            ->get();
+        return response()->json($users);
+    }
+
     // ✅ GET /api/users/{id} — Récupérer un utilisateur par ID
     public function show($id)
     {

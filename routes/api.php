@@ -270,6 +270,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // ✅ IMPORTANT : La route 'suggestions' doit être AVANT /{id}
 // sinon Laravel va essayer de trouver un user avec id="suggestions"
+Route::get('/users', [UserController::class, 'index']);
 Route::get('/users/suggestions', [UserController::class, 'suggestions']);
 Route::get('/users/username/{username}', [UserController::class, 'showByUsername']);
 
