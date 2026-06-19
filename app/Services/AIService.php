@@ -25,30 +25,33 @@ class AIService
     {
         $fullPrompt = $this->buildPrompt($prompt, $context);
 
+        // Groq en priorité pour le texte (rapide + gratuit)
         if ($this->groqApiKey) {
             try {
-                Log::info('Tentative avec Groq...');
+                Log::info('Groq (Llama 3.3 70B)...');
                 return $this->askGroq($fullPrompt);
             } catch (\Exception $e) {
                 Log::warning('Groq failed: ' . $e->getMessage());
             }
         }
 
-        if ($this->openRouterApiKey) {
-            try {
-                Log::info('Tentative avec OpenRouter...');
-                return $this->askOpenRouter($fullPrompt);
-            } catch (\Exception $e) {
-                Log::warning('OpenRouter failed: ' . $e->getMessage());
-            }
-        }
-
+        // Gemini pour texte
         if ($this->geminiApiKey) {
             try {
-                Log::info('Tentative avec Gemini...');
+                Log::info('Gemini 2.0 Flash (texte)...');
                 return $this->askGemini($fullPrompt);
             } catch (\Exception $e) {
                 Log::error('Gemini failed: ' . $e->getMessage());
+            }
+        }
+
+        // OpenRouter fallback
+        if ($this->openRouterApiKey) {
+            try {
+                Log::info('OpenRouter (Mistral)...');
+                return $this->askOpenRouter($fullPrompt);
+            } catch (\Exception $e) {
+                Log::error('OpenRouter failed: ' . $e->getMessage());
             }
         }
 
@@ -56,128 +59,268 @@ class AIService
     }
 
     /**
-     * 📄 Lire PDF/image via OpenRouter (Qwen Vision) — principal pour PDFs scannés
+     * 📄 Lire UN FICHIER (PDF/Image) - OPTIMISÉ PRODUCTION
+     * 
+     * ✅ Gemini en priorité : Lit PDFs natifs + images
+     * ✅ OpenRouter Qwen en fallback pour images
      */
-    public function askWithFileViaOpenRouter($prompt, $filePath, $mimeType = 'application/pdf')
+    public function askWithFile($prompt, $filePath)
     {
-        if (!$this->openRouterApiKey) {
-            throw new \Exception('OpenRouter API key not configured');
+        $mimeType = mime_content_type($filePath);
+        $fileSize = filesize($filePath);
+        
+        Log::info("askWithFile: type={$mimeType}, size={$fileSize} bytes");
+        
+        // 📄 PDF → GEMINI DIRECTEMENT (le SEUL qui lit les PDFs nativement)
+        if ($mimeType === 'application/pdf') {
+            return $this->readPdfWithGemini($prompt, $filePath, $fileSize);
         }
-
-        $fileContent = base64_encode(file_get_contents($filePath));
-
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $this->openRouterApiKey,
-            'Content-Type'  => 'application/json',
-        ])->timeout(180)->post('https://openrouter.ai/api/v1/chat/completions', [
-            "model" => "qwen/qwen2.5-vl-72b-instruct:free",
-            "messages" => [
-                [
-                    "role" => "user",
-                    "content" => [
-                        [
-                            "type" => "text",
-                            "text" => $prompt
-                        ],
-                        [
-                            "type" => "image_url",
-                            "image_url" => [
-                                "url" => "data:{$mimeType};base64,{$fileContent}"
-                            ]
-                        ]
-                    ]
-                ]
-            ],
-            "temperature" => 0.3,
-            "max_tokens"  => 4000
-        ]);
-
-        if (!$response->successful()) {
-            Log::error('OpenRouter Vision error: ' . $response->body());
-            throw new \Exception("OpenRouter Vision API error: " . $response->status());
+        
+        // 🖼️ IMAGE → GEMINI ou OPENROUTER QWEN
+        if (in_array($mimeType, ['image/jpeg', 'image/png', 'image/webp', 'image/gif'])) {
+            return $this->readImageWithVision($prompt, $filePath, $mimeType);
         }
-
-        $result = $response->json();
-        return $result['choices'][0]['message']['content'] ?? "No response.";
+        
+        throw new \Exception("Format non supporté: {$mimeType}. Utilisez PDF, JPG, PNG.");
     }
 
     /**
-     * 🔥 Lire PDF avec Gemini Vision — fallback si OpenRouter échoue
+     * 📄 LIRE PDF AVEC GEMINI (NATIF - AUCUNE CONVERSION)
      */
-    public function askGeminiWithFile($prompt, $filePath)
+    private function readPdfWithGemini($prompt, $filePath, $fileSize)
     {
         if (!$this->geminiApiKey) {
-            throw new \Exception('Gemini API key not configured');
+            // Si pas de Gemini, essayer avec OpenRouter (va échouer pour PDF natif)
+            Log::warning('Gemini API key manquante, tentative OpenRouter...');
+            return $this->readPdfFallbackOpenRouter($prompt, $filePath);
         }
-
+        
+        // Vérifier la taille du PDF
+        if ($fileSize > 20 * 1024 * 1024) { // 20MB max pour Gemini
+            Log::warning('PDF trop volumineux (>20MB), compression suggérée');
+            // Tenter quand même
+        }
+        
+        // Lire le PDF en base64
         $fileContent = base64_encode(file_get_contents($filePath));
-        $mimeType = 'application/pdf';
-
-        $response = Http::timeout(180)->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
-            [
-                "contents" => [
-                    [
-                        "parts" => [
-                            [
-                                "inline_data" => [
-                                    "mime_type" => $mimeType,
-                                    "data" => $fileContent
+        
+        try {
+            Log::info('Envoi PDF à Gemini 2.0 Flash...');
+            
+            $response = Http::timeout(180)->post(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
+                [
+                    "contents" => [
+                        [
+                            "parts" => [
+                                [
+                                    "text" => $prompt  // ⚠️ TOUJOURS le texte en premier
+                                ],
+                                [
+                                    "inline_data" => [
+                                        "mime_type" => "application/pdf",
+                                        "data" => $fileContent
+                                    ]
                                 ]
-                            ],
+                            ]
+                        ]
+                    ],
+                    "generationConfig" => [
+                        "temperature" => 0.3,
+                        "maxOutputTokens" => 8192  // Assez pour 20 QCM
+                    ]
+                ]
+            );
+            
+            if (!$response->successful()) {
+                Log::error('Gemini PDF error: ' . $response->body());
+                throw new \Exception("Gemini a refusé le PDF: " . $response->status());
+            }
+            
+            $result = $response->json();
+            
+            // Vérifier la réponse
+            if (!isset($result['candidates'][0]['content']['parts'][0]['text'])) {
+                Log::error('Gemini PDF: réponse invalide', ['result' => $result]);
+                
+                // Vérifier si PDF bloqué par sécurité
+                if (isset($result['candidates'][0]['finishReason']) && 
+                    $result['candidates'][0]['finishReason'] === 'SAFETY') {
+                    throw new \Exception("PDF bloqué par le filtre de sécurité Google");
+                }
+                
+                throw new \Exception("Gemini n'a pas pu lire ce PDF (peut-être corrompu ou protégé)");
+            }
+            
+            return $result['candidates'][0]['content']['parts'][0]['text'];
+            
+        } catch (\Exception $e) {
+            Log::error('Gemini PDF exception: ' . $e->getMessage());
+            
+            // Tenter OpenRouter en dernier recours
+            if ($this->openRouterApiKey) {
+                Log::info('Fallback: OpenRouter pour PDF...');
+                return $this->readPdfFallbackOpenRouter($prompt, $filePath);
+            }
+            
+            throw $e;
+        }
+    }
+
+    /**
+     * 🔄 FALLBACK: OpenRouter pour PDF (conversion légère via Qwen)
+     * Note: Qwen ne lit pas les PDFs natifs, on convertit via l'API elle-même
+     */
+    private function readPdfFallbackOpenRouter($prompt, $filePath)
+    {
+        if (!$this->openRouterApiKey) {
+            throw new \Exception('Aucun service Vision disponible. Ajoutez une clé Gemini API (gratuit).');
+        }
+        
+        // Qwen VL peut essayer de lire le PDF comme "image" brute
+        // Solution: envoyer le PDF comme application/pdf (Qwen le rejette souvent)
+        // Alternative: utiliser un service tiers gratuit de conversion PDF->Image
+        
+        Log::warning('Tentative OpenRouter pour PDF (peut échouer)...');
+        
+        $fileContent = base64_encode(file_get_contents($filePath));
+        
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->openRouterApiKey,
+                'Content-Type'  => 'application/json',
+            ])->timeout(180)->post('https://openrouter.ai/api/v1/chat/completions', [
+                "model" => "qwen/qwen2.5-vl-72b-instruct:free",
+                "messages" => [
+                    [
+                        "role" => "user",
+                        "content" => [
+                            ["type" => "text", "text" => $prompt],
                             [
-                                "text" => $prompt
+                                "type" => "image_url",
+                                "image_url" => [
+                                    "url" => "data:application/pdf;base64,{$fileContent}"
+                                ]
                             ]
                         ]
                     ]
                 ],
-                "generationConfig" => [
-                    "temperature" => 0.3,
-                    "maxOutputTokens" => 4000
-                ]
-            ]
-        );
-
-        if (!$response->successful()) {
-            Log::error('Gemini Vision error: ' . $response->body());
-            throw new \Exception("Gemini Vision API error: " . $response->status());
+                "temperature" => 0.3,
+                "max_tokens"  => 4000
+            ]);
+            
+            if ($response->successful()) {
+                $result = $response->json();
+                return $result['choices'][0]['message']['content'] ?? "No response.";
+            }
+            
+            throw new \Exception("OpenRouter ne supporte pas les PDFs directement");
+            
+        } catch (\Exception $e) {
+            Log::error('OpenRouter PDF fallback failed: ' . $e->getMessage());
+            throw new \Exception(
+                "Impossible de lire ce PDF. " .
+                "Solutions: 1) Ajoutez une clé Gemini API (gratuit, lit les PDFs nativement) " .
+                "2) Convertissez le PDF en images manuellement"
+            );
         }
-
-        $result = $response->json();
-        return $result['candidates'][0]['content']['parts'][0]['text'] ?? "No response.";
     }
 
     /**
-     * 📄 Méthode unifiée pour lire un fichier — OpenRouter d'abord, Gemini en fallback
+     * 🖼️ LIRE IMAGE (Gemini ou OpenRouter Qwen)
      */
-    public function askWithFile($prompt, $filePath)
+    private function readImageWithVision($prompt, $filePath, $mimeType)
     {
-        // 1️⃣ OpenRouter Vision (Qwen) — gratuit, pas de limite stricte
-        if ($this->openRouterApiKey) {
-            try {
-                Log::info('Tentative Vision avec OpenRouter (Qwen)...');
-                return $this->askWithFileViaOpenRouter($prompt, $filePath);
-            } catch (\Exception $e) {
-                Log::warning('OpenRouter Vision failed: ' . $e->getMessage());
-            }
-        }
-
-        // 2️⃣ Gemini Vision — fallback
+        $fileContent = base64_encode(file_get_contents($filePath));
+        
+        // Essayer Gemini d'abord (meilleur pour la 3rbiya)
         if ($this->geminiApiKey) {
             try {
-                Log::info('Tentative Vision avec Gemini...');
-                return $this->askGeminiWithFile($prompt, $filePath);
+                Log::info('Envoi image à Gemini...');
+                
+                $response = Http::timeout(180)->post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
+                    [
+                        "contents" => [
+                            [
+                                "parts" => [
+                                    ["text" => $prompt],
+                                    [
+                                        "inline_data" => [
+                                            "mime_type" => $mimeType,
+                                            "data" => $fileContent
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ],
+                        "generationConfig" => [
+                            "temperature" => 0.3,
+                            "maxOutputTokens" => 4000
+                        ]
+                    ]
+                );
+                
+                if ($response->successful()) {
+                    $result = $response->json();
+                    return $result['candidates'][0]['content']['parts'][0]['text'] ?? "No response.";
+                }
+                
+                Log::warning('Gemini image failed, trying OpenRouter...');
+                
             } catch (\Exception $e) {
-                Log::error('Gemini Vision failed: ' . $e->getMessage());
+                Log::warning('Gemini image exception: ' . $e->getMessage());
             }
         }
-
-        throw new \Exception('Aucun service Vision disponible. PDF illisible.');
+        
+        // Fallback: OpenRouter Qwen
+        if ($this->openRouterApiKey) {
+            try {
+                Log::info('Envoi image à OpenRouter Qwen...');
+                
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $this->openRouterApiKey,
+                    'Content-Type'  => 'application/json',
+                ])->timeout(180)->post('https://openrouter.ai/api/v1/chat/completions', [
+                    "model" => "qwen/qwen2.5-vl-72b-instruct:free",
+                    "messages" => [
+                        [
+                            "role" => "user",
+                            "content" => [
+                                ["type" => "text", "text" => $prompt],
+                                [
+                                    "type" => "image_url",
+                                    "image_url" => [
+                                        "url" => "data:{$mimeType};base64,{$fileContent}"
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ],
+                    "temperature" => 0.3,
+                    "max_tokens"  => 4000
+                ]);
+                
+                if ($response->successful()) {
+                    $result = $response->json();
+                    return $result['choices'][0]['message']['content'] ?? "No response.";
+                }
+                
+                throw new \Exception("OpenRouter Vision error: " . $response->status());
+                
+            } catch (\Exception $e) {
+                Log::error('OpenRouter image error: ' . $e->getMessage());
+                throw $e;
+            }
+        }
+        
+        throw new \Exception('Aucun service Vision disponible');
     }
 
-    /**
-     * 🚀 GROQ
-     */
+    // ==========================================
+    // MÉTHODES EXISTANTES (INCHANGÉES)
+    // ==========================================
+    
     private function askGroq($prompt)
     {
         $response = Http::withHeaders([
@@ -190,10 +333,7 @@ class AIService
                     "role" => "system",
                     "content" => "You must ALWAYS follow the exact language requested in the user prompt. Never change language."
                 ],
-                [
-                    "role" => "user",
-                    "content" => $prompt
-                ]
+                ["role" => "user", "content" => $prompt]
             ],
             "temperature" => 0.7,
             "max_tokens" => 2000
@@ -203,13 +343,9 @@ class AIService
             throw new \Exception("Groq API error: " . $response->status());
         }
 
-        $result = $response->json();
-        return $result['choices'][0]['message']['content'] ?? "No response";
+        return $response['choices'][0]['message']['content'] ?? "No response";
     }
 
-    /**
-     * 🔀 OpenRouter
-     */
     private function askOpenRouter($prompt)
     {
         $response = Http::withHeaders([
@@ -229,13 +365,9 @@ class AIService
             throw new \Exception("OpenRouter API error: " . $response->status());
         }
 
-        $result = $response->json();
-        return $result['choices'][0]['message']['content'] ?? "No response.";
+        return $response['choices'][0]['message']['content'] ?? "No response.";
     }
 
-    /**
-     * 🧠 Gemini texte
-     */
     private function askGemini($prompt)
     {
         $response = Http::timeout(120)->post(
@@ -259,30 +391,20 @@ class AIService
             throw new \Exception("Gemini API error: " . $response->status());
         }
 
-        $result = $response->json();
-        return $result['candidates'][0]['content']['parts'][0]['text'] ?? "No response.";
+        return $response['candidates'][0]['content']['parts'][0]['text'] ?? "No response.";
     }
 
-    /**
-     * 🏗️ Construire le prompt
-     */
     private function buildPrompt($prompt, $context = [])
     {
-        if (empty($context)) {
-            return $prompt;
-        }
-
+        if (empty($context)) return $prompt;
+        
         $contextStr = "Contexte:\n";
         foreach ($context as $key => $value) {
             $contextStr .= "- $key: $value\n";
         }
-
         return $contextStr . "\n\nQuestion: " . $prompt;
     }
 
-    /**
-     * 🔥 Version avec mémoire
-     */
     public function askWithHistory($messages)
     {
         if ($this->groqApiKey) {
@@ -305,5 +427,21 @@ class AIService
 
         $lastMessage = end($messages);
         return $this->ask($lastMessage['content']);
+    }
+    
+    /**
+     * 📦 Méthode publique pour lire PDF avec Gemini (utilisée dans le contrôleur si besoin)
+     */
+    public function askGeminiWithFile($prompt, $filePath)
+    {
+        return $this->readPdfWithGemini($prompt, $filePath, filesize($filePath));
+    }
+    
+    /**
+     * 📦 OpenRouter Vision pour fichiers simples (compatibilité avec l'ancien code)
+     */
+    public function askWithFileViaOpenRouter($prompt, $filePath, $mimeType = 'image/jpeg')
+    {
+        return $this->readImageWithVision($prompt, $filePath, $mimeType);
     }
 }
