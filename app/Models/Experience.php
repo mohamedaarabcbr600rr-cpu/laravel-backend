@@ -13,15 +13,11 @@ class Experience extends Model
         'user_id',
         'title',
         'content',
-        'media_path',
-        'media_type',
         'shared_from'
     ];
 
-    // 👇 IMPORTANT
     protected $appends = [
         'likes_count',
-        'media_url',
         'reactions_count'
     ];
 
@@ -55,30 +51,25 @@ class Experience extends Model
         return $this->hasMany(Experience::class, 'shared_from');
     }
 
-    // ✅ TOTAL LIKES
+    public function medias()
+    {
+        return $this->hasMany(ExperienceMedia::class);
+    }
+
     public function getLikesCountAttribute()
     {
         return $this->likes()->count();
     }
 
-    // ✅ MEDIA URL
-    public function getMediaUrlAttribute()
-    {
-        return $this->media_path
-            ? asset('storage/' . $this->media_path)
-            : null;
-    }
-
-    // 🔥 REACTIONS GROUPÉES (IMPORTANT)
     public function getReactionsCountAttribute()
     {
         return [
-            'like' => $this->likes()->where('reaction_type', 'like')->count(),
-            'love' => $this->likes()->where('reaction_type', 'love')->count(),
-            'haha' => $this->likes()->where('reaction_type', 'haha')->count(),
-            'wow'  => $this->likes()->where('reaction_type', 'wow')->count(),
-            'sad'  => $this->likes()->where('reaction_type', 'sad')->count(),
-            'angry'=> $this->likes()->where('reaction_type', 'angry')->count(),
+            'like'  => $this->likes()->where('reaction_type', 'like')->count(),
+            'love'  => $this->likes()->where('reaction_type', 'love')->count(),
+            'haha'  => $this->likes()->where('reaction_type', 'haha')->count(),
+            'wow'   => $this->likes()->where('reaction_type', 'wow')->count(),
+            'sad'   => $this->likes()->where('reaction_type', 'sad')->count(),
+            'angry' => $this->likes()->where('reaction_type', 'angry')->count(),
         ];
     }
 }

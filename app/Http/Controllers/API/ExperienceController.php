@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Experience;
+use App\Models\ExperienceMedia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -12,9 +13,6 @@ use Illuminate\Support\Facades\Auth;
 
 class ExperienceController extends Controller
 {
-    /**
-     * Récupérer toutes les expériences avec leurs relations
-     */
     public function index()
     {
         $experiences = Experience::with([
@@ -24,39 +22,23 @@ class ExperienceController extends Controller
                 $query->with('user:id,name,profile_pic')
                       ->orderBy('created_at', 'desc');
             },
-            'original.user:id,name,profile_pic'
+            'original.user:id,name,profile_pic',
+            'medias'
         ])
         ->withCount('likes')
         ->orderBy('created_at', 'desc')
         ->get();
 
-        $experiences->each(function ($exp) {
-    if ($exp->media_path) {
-        $exp->media_url = asset('storage/' . $exp->media_path);
-    }
-
-    $exp->reactions_count = [
-        'like' => $exp->likes()->where('reaction_type', 'like')->count(),
-        'love' => $exp->likes()->where('reaction_type', 'love')->count(),
-        'haha' => $exp->likes()->where('reaction_type', 'haha')->count(),
-        'wow'  => $exp->likes()->where('reaction_type', 'wow')->count(),
-        'sad'  => $exp->likes()->where('reaction_type', 'sad')->count(),
-        'angry'=> $exp->likes()->where('reaction_type', 'angry')->count(),
-    ];
-});
-
         return response()->json($experiences);
     }
 
-    /**
-     * Créer une nouvelle expérience
-     */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'title' => 'nullable|string|max:255',
-            'content' => 'nullable|string',
-            'media' => 'nullable|file|max:10240', // 10MB max
+            'title'     => 'nullable|string|max:255',
+            'content'   => 'nullable|string',
+            'media'     => 'nullable|array',
+            'media.*'   => 'nullable|file|max:10240',
         ]);
 
         if ($validator->fails()) {
@@ -68,49 +50,40 @@ class ExperienceController extends Controller
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
-        $data = [
+        $experience = Experience::create([
             'user_id' => $user->id,
-            'title' => $request->title,
+            'title'   => $request->title,
             'content' => $request->content,
-        ];
+        ]);
 
         if ($request->hasFile('media')) {
-            $file = $request->file('media');
-            $path = $file->store('media', 'public');
+            foreach ($request->file('media') as $file) {
+                $path     = $file->store('media', 'public');
+                $mimeType = $file->getMimeType();
+                $type     = str_starts_with($mimeType, 'video/') ? 'video' : 'image';
 
-            $data['media_path'] = $path;
-
-            $mimeType = $file->getMimeType();
-            if (str_starts_with($mimeType, 'image/')) {
-                $data['media_type'] = 'image';
-            } elseif (str_starts_with($mimeType, 'video/')) {
-                $data['media_type'] = 'video';
+                ExperienceMedia::create([
+                    'experience_id' => $experience->id,
+                    'path'          => $path,
+                    'type'          => $type,
+                ]);
             }
         }
 
-        $experience = Experience::create($data);
-
-        $experience->load('user:id,name,profile_pic');
-        $experience->load('likes');
+        $experience->load(['user:id,name,profile_pic', 'likes', 'medias']);
         $experience->likes_count = 0;
-
-        if ($experience->media_path) {
-            $experience->media_url = asset('storage/' . $experience->media_path);
-        }
 
         return response()->json($experience, 201);
     }
 
-    /**
-     * Récupérer une expérience spécifique
-     */
     public function show($id)
     {
         $experience = Experience::with([
             'user:id,name,profile_pic',
             'likes',
             'comments.user:id,name,profile_pic',
-            'original.user:id,name,profile_pic'
+            'original.user:id,name,profile_pic',
+            'medias'
         ])
         ->withCount('likes')
         ->find($id);
@@ -119,18 +92,11 @@ class ExperienceController extends Controller
             return response()->json(['error' => 'Experience not found'], 404);
         }
 
-        if ($experience->media_path) {
-            $experience->media_url = asset('storage/' . $experience->media_path);
-        }
-
         $experience->likes_count = $experience->likes->count();
 
         return response()->json($experience);
     }
 
-    /**
-     * Mettre à jour une expérience
-     */
     public function update(Request $request, $id)
     {
         $user = $request->user();
@@ -148,7 +114,7 @@ class ExperienceController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'title' => 'nullable|string|max:255',
+            'title'   => 'nullable|string|max:255',
             'content' => 'nullable|string',
         ]);
 
@@ -157,77 +123,58 @@ class ExperienceController extends Controller
         }
 
         $experience->update([
-            'title' => $request->title ?? $experience->title,
+            'title'   => $request->title   ?? $experience->title,
             'content' => $request->content ?? $experience->content,
         ]);
 
-        $experience->load('user:id,name,profile_pic');
-        $experience->load('likes');
+        $experience->load(['user:id,name,profile_pic', 'likes', 'medias']);
         $experience->likes_count = $experience->likes->count();
 
         return response()->json($experience);
     }
 
-    /**
-     * Supprimer une expérience
-     */
-  public function destroy(Request $request, $id)
-{
-    $user = $request->user();
-    if (!$user) {
-        return response()->json(['error' => 'Unauthorized'], 401);
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $experience = Experience::find($id);
+        if (!$experience) {
+            return response()->json(['error' => 'Experience not found'], 404);
+        }
+
+        if ($experience->user_id !== $user->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        foreach ($experience->medias as $media) {
+            Storage::disk('public')->delete($media->path);
+        }
+
+        \DB::table('notifications')
+            ->whereJsonContains('data->experience_id', (int)$id)
+            ->delete();
+
+        $experience->delete();
+
+        return response()->json(['status' => 'deleted']);
     }
 
-    $experience = Experience::find($id);
-    if (!$experience) {
-        return response()->json(['error' => 'Experience not found'], 404);
-    }
-
-    if ($experience->user_id !== $user->id) {
-        return response()->json(['error' => 'Unauthorized'], 403);
-    }
-
-    if ($experience->media_path) {
-        Storage::disk('public')->delete($experience->media_path);
-    }
-
-    \DB::table('notifications')->whereJsonContains('data->experience_id', (int)$id)->delete();
-
-    $experience->delete();
-
-    return response()->json(['status' => 'deleted']);
-}
-
-    /**
-     * Récupérer les expériences d'un utilisateur
-     */
     public function userExperiences($userId)
     {
         $experiences = Experience::with([
             'user:id,name,profile_pic',
             'likes',
             'comments.user:id,name,profile_pic',
-            'original.user:id,name,profile_pic'
+            'original.user:id,name,profile_pic',
+            'medias'
         ])
         ->withCount('likes')
         ->where('user_id', $userId)
         ->orderBy('created_at', 'desc')
         ->get();
-
-       $experiences->each(function ($exp) {
-    if ($exp->media_path) {
-        $exp->media_url = asset('storage/' . $exp->media_path);
-    }
-
-    $exp->reactions_count = [
-        'like' => $exp->likes()->where('reaction_type', 'like')->count(),
-        'love' => $exp->likes()->where('reaction_type', 'love')->count(),
-        'haha' => $exp->likes()->where('reaction_type', 'haha')->count(),
-        'wow'  => $exp->likes()->where('reaction_type', 'wow')->count(),
-        'sad'  => $exp->likes()->where('reaction_type', 'sad')->count(),
-        'angry'=> $exp->likes()->where('reaction_type', 'angry')->count(),
-    ];
-});
 
         return response()->json($experiences);
     }
