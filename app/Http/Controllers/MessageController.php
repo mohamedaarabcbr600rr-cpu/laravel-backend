@@ -6,6 +6,9 @@ use Illuminate\Http\Request;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Events\MessageSent;
+use App\Events\TypingIndicator;
+use App\Events\MessageRead;
 
 class MessageController extends Controller
 {
@@ -95,12 +98,19 @@ class MessageController extends Controller
             'seen' => false
         ]);
 
+        // Eager load user relation for the broadcast payload (avoids N+1 in broadcastWith)
+        $message->load('user');
+
         // Update user last seen
         User::where('id', $request->user_id)->update([
             'last_seen' => now()
         ]);
 
-        return response()->json($message->load('user'), 201);
+        // 🔥 Realtime delivery via Laravel Reverb
+        // toOthers() excludes the sender's own socket connection.
+        broadcast(new MessageSent($message))->toOthers();
+
+        return response()->json($message, 201);
     }
 
     /**
@@ -159,6 +169,9 @@ class MessageController extends Controller
             ->where('user_id', '!=', $request->user_id)
             ->update(['seen' => true]);
 
+        // 🔥 Realtime read-receipt via Reverb
+        broadcast(new MessageRead((int) $conversationId, (int) $request->user_id))->toOthers();
+
         return response()->json(['success' => true]);
     }
 
@@ -183,6 +196,13 @@ class MessageController extends Controller
             'user_id' => $request->user_id,
             'is_typing' => $request->is_typing
         ];
+
+        // 🔥 Realtime typing indicator via Reverb
+        broadcast(new TypingIndicator(
+            (int) $conversationId,
+            (int) $request->user_id,
+            (bool) $request->is_typing
+        ))->toOthers();
 
         return response()->json(['ok' => true]);
     }
@@ -233,40 +253,40 @@ class MessageController extends Controller
     }
 
     public function unreadCount()
-{
-    $userId = auth()->id();
+    {
+        $userId = auth()->id();
 
-    $count = \App\Models\Message::where('seen', false)
-        ->where('user_id', '!=', $userId)
-        ->whereHas('conversation', function($q) use ($userId) {
-            $q->where('user_one', $userId)   // ← was user1_id
-              ->orWhere('user_two', $userId); // ← was user2_id
-        })
-        ->count();
-
-    return response()->json(['unread_count' => $count]);
-}
-
-public function getConversations()
-{
-    $userId = auth()->id();
-    
-    $conversations = \App\Models\Conversation::where('user_one', $userId)
-    ->orWhere('user_two', $userId)
-    ->get()
-    ->map(function($conv) use ($userId) {
-        $otherId = $conv->user_one === $userId ? $conv->user_two : $conv->user_one;
-        $unread = \App\Models\Message::where('conversation_id', $conv->id)
+        $count = \App\Models\Message::where('seen', false)
             ->where('user_id', '!=', $userId)
-            ->where('seen', false)
+            ->whereHas('conversation', function($q) use ($userId) {
+                $q->where('user_one', $userId)
+                  ->orWhere('user_two', $userId);
+            })
             ->count();
-        return [
-            'conversation_id' => $conv->id,
-            'other_user_id' => $otherId,
-            'unread_count' => $unread,
-        ];
-    });
-    
-    return response()->json($conversations);
-}
+
+        return response()->json(['unread_count' => $count]);
+    }
+
+    public function getConversations()
+    {
+        $userId = auth()->id();
+
+        $conversations = \App\Models\Conversation::where('user_one', $userId)
+        ->orWhere('user_two', $userId)
+        ->get()
+        ->map(function($conv) use ($userId) {
+            $otherId = $conv->user_one === $userId ? $conv->user_two : $conv->user_one;
+            $unread = \App\Models\Message::where('conversation_id', $conv->id)
+                ->where('user_id', '!=', $userId)
+                ->where('seen', false)
+                ->count();
+            return [
+                'conversation_id' => $conv->id,
+                'other_user_id' => $otherId,
+                'unread_count' => $unread,
+            ];
+        });
+
+        return response()->json($conversations);
+    }
 }
