@@ -8,11 +8,17 @@ return new class extends Migration
 {
     public function up()
     {
-        // already handled in create_messages_table
+        Schema::table('users', function (Blueprint $table) {
+            if (! Schema::hasColumn('users', 'last_seen')) {
+                $table->timestamp('last_seen')->nullable();
+            }
+        });
     }
 
     public function down()
     {
-        // nothing to rollback
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('last_seen');
+        });
     }
 };
