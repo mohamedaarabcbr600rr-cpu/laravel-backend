@@ -13,8 +13,12 @@ use Illuminate\Support\Facades\Auth;
 
 class ExperienceController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        // Pagination : 5 à 7 publications par défaut, plafonnée à 20 max côté sécurité
+        $perPage = (int) $request->query('per_page', 6);
+        $perPage = max(1, min($perPage, 20));
+
         $experiences = Experience::with([
             'user:id,name,profile_pic',
             'likes',
@@ -27,7 +31,8 @@ class ExperienceController extends Controller
         ])
         ->withCount('likes')
         ->orderBy('created_at', 'desc')
-        ->get();
+        ->orderBy('id', 'desc') // tie-breaker pour un ordre stable entre les pages
+        ->paginate($perPage);
 
         return response()->json($experiences);
     }
