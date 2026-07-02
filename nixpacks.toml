@@ -1,0 +1,2 @@
+[phases.setup]
+nixPkgs = ["php82", "php82Packages.composer", "php82Extensions.pcntl", "php82Extensions.posix"]
