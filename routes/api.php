@@ -45,8 +45,8 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Lien cliqué dans l'email — vérifie et redirige vers le frontend
-Route::get('/email/verify/{id}/{hash}', function (Request $request, $id) {
-    $user = User::findOrFail($id);
+Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {
+        $user = User::findOrFail($id);
 
     if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
         return redirect(env('FRONTEND_URL', 'https://studmo.com') . '/email-verified?status=invalid');
