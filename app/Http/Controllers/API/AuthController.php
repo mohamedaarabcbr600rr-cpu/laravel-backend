@@ -36,6 +36,8 @@ class AuthController extends Controller
         'points_forts' => json_encode([]),
     ]);
 
+    $user->sendEmailVerificationNotification();
+
     $token = $user->createToken('talib_token')->plainTextToken;
 
     return response()->json([

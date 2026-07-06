@@ -23,6 +23,8 @@ use App\Http\Controllers\MessageController;
 
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AdminController;
+
+use Illuminate\Support\Facades\URL;
 // Routes protégées par authentification
 Route::middleware('auth:sanctum')->group(function () {
     // Profil
@@ -41,6 +43,32 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
+// Lien cliqué dans l'email — vérifie et redirige vers le frontend
+Route::get('/email/verify/{id}/{hash}', function (Request $request, $id) {
+    $user = User::findOrFail($id);
+
+    if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+        return redirect(env('FRONTEND_URL', 'https://studmo.com') . '/email-verified?status=invalid');
+    }
+
+    if (! URL::hasValidSignature($request)) {
+        return redirect(env('FRONTEND_URL', 'https://studmo.com') . '/email-verified?status=expired');
+    }
+
+    if (! $user->hasVerifiedEmail()) {
+        $user->markEmailAsVerified();
+    }
+
+    return redirect(env('FRONTEND_URL', 'https://studmo.com') . '/email-verified?status=success');
+})->middleware(['signed'])->name('verification.verify');
+
+// Renvoyer l'email de vérification (utilisateur connecté)
+Route::post('/email/verification-notification', function (Request $request) {
+    $request->user()->sendEmailVerificationNotification();
+    return response()->json(['message' => 'Email de vérification renvoyé.']);
+})->middleware(['auth:sanctum', 'throttle:6,1']);
+
 
 Route::get('/experiences', [ExperienceController::class,'index']);
 
