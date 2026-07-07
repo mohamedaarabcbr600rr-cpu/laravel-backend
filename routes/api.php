@@ -25,6 +25,9 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\AdminController;
 
 use Illuminate\Support\Facades\URL;
+
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Hash as HashFacade;
 // Routes protégées par authentification
 Route::middleware('auth:sanctum')->group(function () {
     // Profil
@@ -70,6 +73,43 @@ Route::post('/email/verification-notification', function (Request $request) {
 })->middleware(['auth:sanctum', 'throttle:6,1']);
 
 
+
+
+
+Route::post('/forgot-password', function (Request $request) {
+    $request->validate(['email' => 'required|email']);
+
+    $status = Password::sendResetLink($request->only('email'));
+
+    if ($status === Password::RESET_LINK_SENT) {
+        return response()->json(['message' => 'Lien de réinitialisation envoyé.']);
+    }
+
+    return response()->json(['message' => "Impossible d'envoyer le lien."], 400);
+});
+
+Route::post('/reset-password', function (Request $request) {
+    $request->validate([
+        'token' => 'required',
+        'email' => 'required|email',
+        'password' => 'required|min:6|confirmed',
+    ]);
+
+    $status = Password::reset(
+        $request->only('email', 'password', 'password_confirmation', 'token'),
+        function ($user, $password) {
+            $user->forceFill([
+                'password' => \Illuminate\Support\Facades\Hash::make($password)
+            ])->save();
+        }
+    );
+
+    if ($status === Password::PASSWORD_RESET) {
+        return response()->json(['message' => 'Mot de passe réinitialisé avec succès.']);
+    }
+
+    return response()->json(['message' => 'Ce lien est invalide ou a expiré.'], 400);
+});
 Route::get('/experiences', [ExperienceController::class,'index']);
 
 /*
