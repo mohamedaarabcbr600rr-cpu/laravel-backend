@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Messages\BroadcastMessage;
 
 class AppNotification extends Notification
 {
@@ -29,11 +30,26 @@ class AppNotification extends Notification
 
     public function via($notifiable)
     {
-        return ['database'];
+        return ['database', 'broadcast'];
     }
 
     public function toArray($notifiable)
     {
         return $this->data;
+    }
+
+    public function toBroadcast($notifiable)
+    {
+        return new BroadcastMessage([
+            'id' => $this->id,
+            'data' => $this->data,
+            'created_at' => now()->toIso8601String(),
+            'read_at' => null,
+        ]);
+    }
+
+    public function broadcastType()
+    {
+        return 'notification.new';
     }
 }
