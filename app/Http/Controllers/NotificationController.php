@@ -19,7 +19,7 @@ class NotificationController extends Controller
                 return response()->json(['error' => 'Non authentifié'], 401);
             }
             
-            $notifications = $user->notifications()->paginate(20);
+            $notifications = $user->notifications()->latest()->paginate(20);
             
             return response()->json([
                 'notifications' => $notifications,

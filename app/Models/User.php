@@ -179,7 +179,7 @@ public function notifications()
     return $this->morphMany(
         \Illuminate\Notifications\DatabaseNotification::class,
         'notifiable'
-    );
+    )->orderBy('created_at', 'desc');
 }
 
 public function sendPasswordResetNotification($token)
