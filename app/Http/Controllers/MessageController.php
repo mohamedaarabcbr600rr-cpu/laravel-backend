@@ -268,25 +268,36 @@ class MessageController extends Controller
     }
 
     public function getConversations()
-    {
-        $userId = auth()->id();
+{
+    $userId = auth()->id();
 
-        $conversations = \App\Models\Conversation::where('user_one', $userId)
+    $conversations = \App\Models\Conversation::where('user_one', $userId)
         ->orWhere('user_two', $userId)
         ->get()
         ->map(function($conv) use ($userId) {
             $otherId = $conv->user_one === $userId ? $conv->user_two : $conv->user_one;
+
             $unread = \App\Models\Message::where('conversation_id', $conv->id)
                 ->where('user_id', '!=', $userId)
                 ->where('seen', false)
                 ->count();
+
+            $lastMessage = \App\Models\Message::where('conversation_id', $conv->id)
+                ->latest('created_at')
+                ->first();
+
             return [
                 'conversation_id' => $conv->id,
                 'other_user_id' => $otherId,
                 'unread_count' => $unread,
+                'last_message_at' => optional($lastMessage)->created_at,
             ];
-        });
+        })
+        ->sortByDesc(function ($c) {
+            return $c['last_message_at'] ?? '1970-01-01';
+        })
+        ->values();
 
-        return response()->json($conversations);
-    }
+    return response()->json($conversations);
+}
 }
