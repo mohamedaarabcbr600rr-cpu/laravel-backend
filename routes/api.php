@@ -112,6 +112,31 @@ Route::post('/reset-password', function (Request $request) {
 });
 Route::get('/experiences', [ExperienceController::class,'index']);
 
+
+Route::get('/challenge/participants', function () {
+    $since = now()->subDays(15);
+
+    $participants = \App\Models\Experience::where('created_at', '>=', $since)
+        ->with('user:id,name,profile_pic')
+        ->get()
+        ->pluck('user')
+        ->filter()
+        ->unique('id')
+        ->values();
+
+    return response()->json([
+        'count' => $participants->count(),
+        'avatars' => $participants->take(4)->map(function ($u) {
+            return [
+                'id' => $u->id,
+                'name' => $u->name,
+                'profile_pic' => $u->profile_pic,
+            ];
+        }),
+    ]);
+});
+
+
 /*
 |--------------------------------------------------------------------------
 | Protected Routes (Sanctum)
