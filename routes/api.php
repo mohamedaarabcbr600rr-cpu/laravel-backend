@@ -49,7 +49,7 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // Lien cliqué dans l'email — vérifie et redirige vers le frontend
 Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {
-        $user = User::findOrFail($id);
+    $user = User::findOrFail($id);
 
     if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
         return redirect(env('FRONTEND_URL', 'https://studmo.com') . '/email-verified?status=invalid');
@@ -61,6 +61,16 @@ Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) 
 
     if (! $user->hasVerifiedEmail()) {
         $user->markEmailAsVerified();
+
+        // Credit the referrer only once, only after the referred user verifies their email
+        if ($user->referred_by && ! $user->referral_credited) {
+            $referrer = User::find($user->referred_by);
+            if ($referrer) {
+                $referrer->increment('referral_count');
+            }
+            $user->referral_credited = true;
+            $user->save();
+        }
     }
 
     return redirect(env('FRONTEND_URL', 'https://studmo.com') . '/email-verified?status=success');
