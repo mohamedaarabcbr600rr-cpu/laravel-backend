@@ -111,7 +111,7 @@ Route::post('/reset-password', function (Request $request) {
     return response()->json(['message' => 'Ce lien est invalide ou a expiré.'], 400);
 });
 Route::get('/experiences', [ExperienceController::class,'index']);
-
+Route::get('/experiences/{id}', [ExperienceController::class, 'show']); 
 
 Route::get('/challenge/participants', function () {
     $since = now()->subDays(15);
@@ -171,7 +171,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Experiences
     Route::post('/experiences', [ExperienceController::class, 'store']);
-    Route::get('/experiences/{id}', [ExperienceController::class, 'show']);
+    
     Route::put('/experiences/{id}', [ExperienceController::class, 'update']);
     Route::delete('/experiences/{id}', [ExperienceController::class, 'destroy']);
 
