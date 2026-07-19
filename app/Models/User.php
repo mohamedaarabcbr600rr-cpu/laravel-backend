@@ -20,7 +20,7 @@ class User extends Authenticatable implements MustVerifyEmail
      * @var list<string>
      */
     protected $fillable = [
-    'name', 'username', 'email', 'password', 'bio', 'link', 'profile_pic'
+    'name', 'username', 'email', 'password', 'bio', 'link', 'profile_pic', 'referred_by', 'country', 'last_active'
 ];
 
     /**
@@ -45,6 +45,22 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
         ];
     }
+
+protected static function boot()
+{
+    parent::boot();
+
+    static::creating(function ($user) {
+        if (empty($user->referral_code)) {
+            do {
+                $code = strtoupper(\Illuminate\Support\Str::random(8));
+            } while (self::where('referral_code', $code)->exists());
+            $user->referral_code = $code;
+        }
+    });
+}
+
+
     public function experiences()
 {
     return $this->hasMany(Experience::class);

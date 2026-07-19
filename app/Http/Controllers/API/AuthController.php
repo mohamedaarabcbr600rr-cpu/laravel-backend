@@ -10,14 +10,20 @@ use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
-  public function register(Request $request)
+ public function register(Request $request)
 {
     $request->validate([
         'name' => 'required',
         'email' => 'required|email|unique:users',
         'password' => 'required|min:6',
-        'country' => 'nullable|string'
+        'country' => 'nullable|string',
+        'referral_code' => 'nullable|string'
     ]);
+
+    $referrer = null;
+    if (!empty($request->referral_code)) {
+        $referrer = User::where('referral_code', strtoupper($request->referral_code))->first();
+    }
 
     $user = User::create([
         'name' => $request->name,
@@ -26,6 +32,7 @@ class AuthController extends Controller
         'password' => Hash::make($request->password),
         'country' => $request->country,
         'last_active' => now(),
+        'referred_by' => $referrer?->id,
     ]);
 
     $user->profile()->create([
