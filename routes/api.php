@@ -161,7 +161,16 @@ Route::middleware('auth:sanctum')->group(function() {
     Route::get('/profile', function (Request $request) {
         return $request->user();
     });
-
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/referral/stats', function (Request $request) {
+        $user = $request->user();
+        return response()->json([
+            'referral_code' => $user->referral_code,
+            'referral_count' => $user->referral_count,
+            'referral_link' => env('FRONTEND_URL', 'https://studmo.com') . '/?ref=' . $user->referral_code,
+        ]);
+    });
+});
    // 
 
     Route::get('/users/{id}/experiences', function ($id) {
