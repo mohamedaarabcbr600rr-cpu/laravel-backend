@@ -27,6 +27,7 @@ class ExperienceController extends Controller
                       ->orderBy('created_at', 'desc');
             },
             'original.user:id,name,profile_pic',
+            'original.medias',
             'medias'
         ])
         ->withCount('likes')
