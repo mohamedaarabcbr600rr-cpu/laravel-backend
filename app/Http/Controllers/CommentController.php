@@ -36,7 +36,7 @@ class CommentController extends Controller
         'content' => $request->content,
     ]);
 
-    $comment->load('user:id,name,profile_pic');
+    $comment->load('user:id,name,profile_pic,referral_count');
 
     // ✅ METTRE LA NOTIFICATION AVANT LE RETURN
     if ($experience->user_id != $user->id) {
@@ -123,7 +123,7 @@ class CommentController extends Controller
             'content' => $request->content
         ]);
 
-        $comment->load('user:id,name,profile_pic');
+        $comment->load('user:id,name,profile_pic,referral_count');
 
         return response()->json([
             'status' => 'updated',
@@ -187,7 +187,7 @@ public function reply(Request $request, $id)
         'content' => $request->content,
     ]);
 
-    $reply->load('user:id,name,profile_pic');
+    $reply->load('user:id,name,profile_pic,referral_count');
 
     return response()->json([
         'status' => 'replied',

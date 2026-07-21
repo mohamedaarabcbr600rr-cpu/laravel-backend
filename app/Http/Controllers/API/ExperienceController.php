@@ -24,7 +24,7 @@ class ExperienceController extends Controller
             'likes',
             'comments' => function ($query) {
     $query->whereNull('parent_id')
-          ->with(['user:id,name,profile_pic', 'likes', 'replies'])
+          ->with(['user:id,name,profile_pic,referral_count', 'likes', 'replies'])
           ->orderBy('created_at', 'desc');
 },
             'original.user:id,name,profile_pic',
@@ -77,7 +77,7 @@ class ExperienceController extends Controller
             }
         }
 
-        $experience->load(['user:id,name,profile_pic', 'likes', 'medias']);
+$experience->load(['user:id,name,profile_pic,referral_count', 'likes', 'medias']);
         $experience->likes_count = 0;
 
         return response()->json($experience, 201);
@@ -90,7 +90,7 @@ class ExperienceController extends Controller
             'likes',
             'comments' => function ($query) {
                 $query->whereNull('parent_id')
-                      ->with(['user:id,name,profile_pic', 'likes', 'replies']);
+                      ->with(['user:id,name,profile_pic,referral_count', 'likes', 'replies']);
             },
             'original.user:id,name,profile_pic',
             'original.medias',
@@ -138,7 +138,7 @@ class ExperienceController extends Controller
             'content' => $request->content ?? $experience->content,
         ]);
 
-        $experience->load(['user:id,name,profile_pic', 'likes', 'medias']);
+        $experience->load(['user:id,name,profile_pic,referral_count', 'likes', 'medias']);
         $experience->likes_count = $experience->likes->count();
 
         return response()->json($experience);
@@ -180,7 +180,7 @@ class ExperienceController extends Controller
             'likes',
             'comments' => function ($query) {
     $query->whereNull('parent_id')
-          ->with(['user:id,name,profile_pic', 'likes', 'replies']);
+          ->with(['user:id,name,profile_pic,referral_count', 'likes', 'replies']);
 },
             'original.user:id,name,profile_pic',
             'medias'

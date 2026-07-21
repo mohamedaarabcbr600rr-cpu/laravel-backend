@@ -60,7 +60,7 @@ class UserController extends Controller
             $query->whereNotIn('id', $excludeIds);
         }
 
-        $suggestions = $query->inRandomOrder()->limit(10)->get();
+        $suggestions = $query->inRandomOrder()->limit(10)->get(['id', 'name', 'username', 'bio', 'profile_pic', 'referral_count']);
 
         return response()->json($suggestions);
     }
@@ -74,11 +74,14 @@ class UserController extends Controller
             return response()->json(['message' => 'Utilisateur non trouvé'], 404);
         }
 
-        $experiences = $user->experiences()
+$experiences = $user->experiences()
             ->with([
-                'user:id,name,profile_pic',
+                'user:id,name,profile_pic,referral_count',
                 'likes',
-                'comments.user:id,name,profile_pic',
+                'comments' => function ($query) {
+                    $query->whereNull('parent_id')
+                          ->with(['user:id,name,profile_pic,referral_count', 'likes', 'replies']);
+                },
                 'original.user:id,name,profile_pic',
                 'original.medias',
                 'medias'

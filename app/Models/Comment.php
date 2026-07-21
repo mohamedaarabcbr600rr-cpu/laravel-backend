@@ -25,7 +25,7 @@ public function likes()
 
 public function replies()
 {
-    return $this->hasMany(Comment::class, 'parent_id')->with('user:id,name,profile_pic', 'likes');
+    return $this->hasMany(Comment::class, 'parent_id')->with('user:id,name,profile_pic,referral_count', 'likes');
 }
 
 public function parent()
