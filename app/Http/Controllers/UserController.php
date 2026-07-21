@@ -66,7 +66,7 @@ class UserController extends Controller
     }
 
     // ✅ GET /api/users/{id}/experiences — Expériences d'un utilisateur
-    public function experiences($id)
+   public function experiences($id)
     {
         $user = User::find($id);
 
@@ -75,7 +75,15 @@ class UserController extends Controller
         }
 
         $experiences = $user->experiences()
-            ->with(['user', 'likes', 'comments.user'])
+            ->with([
+                'user:id,name,profile_pic',
+                'likes',
+                'comments.user:id,name,profile_pic',
+                'original.user:id,name,profile_pic',
+                'original.medias',
+                'medias'
+            ])
+            ->withCount('likes')
             ->orderBy('created_at', 'desc')
             ->get();
 
