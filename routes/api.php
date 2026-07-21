@@ -170,7 +170,30 @@ Route::middleware('auth:sanctum')->group(function () {
             'referral_link' => env('FRONTEND_URL', 'https://studmo.com') . '/?ref=' . $user->referral_code,
         ]);
     });
+
+    Route::get('/referral/leaderboard', function (Request $request) {
+    $currentUser = $request->user();
+
+    $top = User::orderByDesc('referral_count')
+        ->where('referral_count', '>', 0)
+        ->take(5)
+        ->get(['id', 'name', 'profile_pic', 'referral_count']);
+
+    $currentUserRank = User::where('referral_count', '>', $currentUser->referral_count)->count() + 1;
+
+    return response()->json([
+        'top' => $top,
+        'you' => [
+            'id' => $currentUser->id,
+            'name' => $currentUser->name,
+            'profile_pic' => $currentUser->profile_pic,
+            'referral_count' => $currentUser->referral_count,
+            'rank' => $currentUserRank,
+        ],
+    ]);
 });
+});
+
    // 
 
     Route::get('/users/{id}/experiences', function ($id) {
