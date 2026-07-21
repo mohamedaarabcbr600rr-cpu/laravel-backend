@@ -23,9 +23,10 @@ class ExperienceController extends Controller
             'user:id,name,profile_pic',
             'likes',
             'comments' => function ($query) {
-                $query->with('user:id,name,profile_pic')
-                      ->orderBy('created_at', 'desc');
-            },
+    $query->whereNull('parent_id')
+          ->with(['user:id,name,profile_pic', 'likes', 'replies'])
+          ->orderBy('created_at', 'desc');
+},
             'original.user:id,name,profile_pic',
             'original.medias',
             'medias'
@@ -87,8 +88,12 @@ class ExperienceController extends Controller
         $experience = Experience::with([
             'user:id,name,profile_pic',
             'likes',
-            'comments.user:id,name,profile_pic',
+            'comments' => function ($query) {
+                $query->whereNull('parent_id')
+                      ->with(['user:id,name,profile_pic', 'likes', 'replies']);
+            },
             'original.user:id,name,profile_pic',
+            'original.medias',
             'medias'
         ])
         ->withCount('likes')
@@ -173,7 +178,10 @@ class ExperienceController extends Controller
         $experiences = Experience::with([
             'user:id,name,profile_pic',
             'likes',
-            'comments.user:id,name,profile_pic',
+            'comments' => function ($query) {
+    $query->whereNull('parent_id')
+          ->with(['user:id,name,profile_pic', 'likes', 'replies']);
+},
             'original.user:id,name,profile_pic',
             'medias'
         ])

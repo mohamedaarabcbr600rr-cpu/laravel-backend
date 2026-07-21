@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Comment extends Model
 {
-    protected $fillable = ['user_id', 'experience_id', 'content'];
+    protected $fillable = ['user_id', 'experience_id', 'parent_id', 'content'];
 
     // Relation avec Experience
     public function experience() {
