@@ -13,9 +13,9 @@ class GoogleAuthController extends Controller
 {
     public function redirect(Request $request)
     {
-        if ($request->has('ref')) {
-            session(['referral_code' => strtoupper($request->query('ref'))]);
-        }
+       if ($request->has('referral_code')) {
+    session(['referral_code' => strtoupper($request->query('referral_code'))]);
+}
 
         return Socialite::driver('google')->redirect();
     }
