@@ -13,11 +13,18 @@ class GoogleAuthController extends Controller
 {
     public function redirect(Request $request)
     {
-       if ($request->has('referral_code')) {
-    session(['referral_code' => strtoupper($request->query('referral_code'))]);
-}
+        $referralCode = $request->has('referral_code')
+            ? strtoupper($request->query('referral_code'))
+            : '';
 
-        return Socialite::driver('google')->redirect();
+        // On encode le referral_code directement dans le paramètre "state" d'OAuth
+        // au lieu de la session, pour survivre au flux cross-domain redirect -> Google -> callback
+        $state = base64_encode($referralCode);
+
+        return Socialite::driver('google')
+            ->stateless()
+            ->with(['state' => $state])
+            ->redirect();
     }
 
     public function callback(Request $request)
@@ -28,6 +35,15 @@ class GoogleAuthController extends Controller
             $googleUser = Socialite::driver('google')->stateless()->user();
         } catch (\Exception $e) {
             return redirect($frontendUrl . '/auth/callback?error=google_failed');
+        }
+
+        // Récupération du referral_code depuis "state" (renvoyé tel quel par Google)
+        $referralCode = null;
+        if ($request->has('state')) {
+            $decoded = base64_decode($request->query('state'));
+            if (!empty($decoded)) {
+                $referralCode = $decoded;
+            }
         }
 
         $user = User::where('email', $googleUser->getEmail())->first();
@@ -42,13 +58,12 @@ class GoogleAuthController extends Controller
             }
             $user->save();
         } else {
-            $referralCode = session('referral_code');
             $referrer = null;
             if ($referralCode) {
                 $referrer = User::where('referral_code', $referralCode)->first();
             }
 
-           $user = User::create([
+            $user = User::create([
                 'name' => $googleUser->getName() ?? $googleUser->getNickname() ?? 'Utilisateur',
                 'username' => $googleUser->getName() ?? ('user' . Str::random(6)),
                 'email' => $googleUser->getEmail(),
@@ -60,7 +75,6 @@ class GoogleAuthController extends Controller
 
             $user->markEmailAsVerified();
 
-            // Google email is already verified by Google — credit the referrer immediately
             if ($referrer && !$user->referral_credited) {
                 $referrer->increment('referral_count');
                 $user->referral_credited = true;
@@ -75,8 +89,6 @@ class GoogleAuthController extends Controller
                 'points_forts' => json_encode([]),
             ]);
         }
-
-        session()->forget('referral_code');
 
         $token = $user->createToken('talib_token')->plainTextToken;
 
