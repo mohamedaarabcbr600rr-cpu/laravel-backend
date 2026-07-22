@@ -20,14 +20,14 @@ class ExperienceController extends Controller
         $perPage = max(1, min($perPage, 20));
 
         $experiences = Experience::with([
-            'user:id,name,profile_pic',
+            'user:id,name,profile_pic,referral_count',
             'likes',
             'comments' => function ($query) {
     $query->whereNull('parent_id')
           ->with(['user:id,name,profile_pic,referral_count', 'likes', 'replies'])
           ->orderBy('created_at', 'desc');
 },
-            'original.user:id,name,profile_pic',
+            'original.user:id,name,profile_pic,referral_count',
             'original.medias',
             'medias'
         ])
@@ -86,13 +86,13 @@ $experience->load(['user:id,name,profile_pic,referral_count', 'likes', 'medias']
     public function show($id)
     {
         $experience = Experience::with([
-            'user:id,name,profile_pic',
+            'user:id,name,profile_pic,referral_count',
             'likes',
             'comments' => function ($query) {
                 $query->whereNull('parent_id')
                       ->with(['user:id,name,profile_pic,referral_count', 'likes', 'replies']);
             },
-            'original.user:id,name,profile_pic',
+            'original.user:id,name,profile_pic,referral_count',
             'original.medias',
             'medias'
         ])
@@ -176,15 +176,17 @@ $experience->load(['user:id,name,profile_pic,referral_count', 'likes', 'medias']
     public function userExperiences($userId)
     {
         $experiences = Experience::with([
-            'user:id,name,profile_pic',
-            'likes',
-            'comments' => function ($query) {
-    $query->whereNull('parent_id')
-          ->with(['user:id,name,profile_pic,referral_count', 'likes', 'replies']);
-},
-            'original.user:id,name,profile_pic',
-            'medias'
-        ])
+    'user:id,name,profile_pic,referral_count',
+    'likes',
+    'comments' => function ($query) {
+        $query->whereNull('parent_id')
+              ->with(['user:id,name,profile_pic,referral_count', 'likes', 'replies'])
+              ->orderBy('created_at', 'desc');
+    },
+    'original.user:id,name,profile_pic,referral_count',
+    'original.medias',
+    'medias'
+])
         ->withCount('likes')
         ->where('user_id', $userId)
         ->orderBy('created_at', 'desc')
