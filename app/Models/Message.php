@@ -12,11 +12,14 @@ class Message extends Model
         'content',
         'file_path',
         'file_type',
-        'seen'
+        'seen',
+        'reply_to_id',
+        'deleted_for_everyone_at',
     ];
 
     protected $casts = [
         'seen' => 'boolean',
+        'deleted_for_everyone_at' => 'datetime',
     ];
 
     public function conversation()
@@ -27,5 +30,10 @@ class Message extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function replyTo()
+    {
+        return $this->belongsTo(Message::class, 'reply_to_id')->with('user');
     }
 }

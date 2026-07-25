@@ -75,7 +75,8 @@ class MessageController extends Controller
         $request->validate([
             'content' => 'nullable|string',
             'user_id' => 'required|exists:users,id',
-            'file' => 'nullable|file|max:10240' // max 10MB
+            'file' => 'nullable|file|max:10240', // max 10MB
+            'reply_to_id' => 'nullable|exists:messages,id'
         ]);
 
         // Handle file upload
@@ -95,11 +96,12 @@ class MessageController extends Controller
             'content' => $request->content,
             'file_path' => $filePath,
             'file_type' => $fileType,
-            'seen' => false
+            'seen' => false,
+            'reply_to_id' => $request->reply_to_id
         ]);
 
         // Eager load user relation for the broadcast payload (avoids N+1 in broadcastWith)
-        $message->load('user');
+        $message->load(['user', 'replyTo.user']);
 
         // Update user last seen
         User::where('id', $request->user_id)->update([
@@ -117,10 +119,10 @@ class MessageController extends Controller
      * Get all messages in a conversation
      * Route: GET /api/messages/{id}
      */
-    public function getMessages($conversationId)
+public function getMessages($conversationId)
     {
         $messages = Message::where('conversation_id', $conversationId)
-            ->with('user')
+            ->with(['user', 'replyTo.user'])
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -145,14 +147,25 @@ class MessageController extends Controller
         return response()->json($message);
     }
 
-    /**
-     * Delete a message
+   /**
+     * Delete a message for everyone (soft — keeps history, shows placeholder)
      * Route: DELETE /api/messages/{id}
      */
-    public function deleteMessage($id)
+    public function deleteMessage(Request $request, $id)
     {
-        Message::findOrFail($id)->delete();
-        return response()->json(['success' => true]);
+        $request->validate([
+            'user_id' => 'required|exists:users,id'
+        ]);
+
+        $message = Message::findOrFail($id);
+
+        if ((int) $message->user_id !== (int) $request->user_id) {
+            return response()->json(['error' => 'Vous ne pouvez supprimer que vos propres messages'], 403);
+        }
+
+        $message->update(['deleted_for_everyone_at' => now()]);
+
+        return response()->json($message->load(['user', 'replyTo.user']));
     }
 
     /**
