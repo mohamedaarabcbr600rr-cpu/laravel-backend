@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class AIInteraction extends Model
 {
+    protected $table = 'ai_interactions';
+
     protected $fillable = [
         'user_id', 'conversation_id', 'type', 'input_text', 'ai_response', 'metadata'
     ];
