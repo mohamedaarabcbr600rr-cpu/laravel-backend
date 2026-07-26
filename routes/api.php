@@ -18,7 +18,7 @@ use App\Http\Controllers\API\StoryController; // أضف هاد الـ use فـ �
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AIStudyController;
 use App\Http\Controllers\MessageController;
-
+use App\Http\Controllers\API\GroupController;
 
 
 use App\Http\Controllers\UserController;
@@ -455,4 +455,13 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/comments/{id}/like', [CommentController::class, 'like']);
     Route::post('/comments/{id}/reply', [CommentController::class, 'reply']);
+});
+
+// Groups
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/groups', [GroupController::class, 'index']);
+    Route::get('/my-groups', [GroupController::class, 'myGroups']);
+    Route::post('/groups', [GroupController::class, 'store']);
+    Route::post('/groups/{id}/join', [GroupController::class, 'join']);
+    Route::post('/groups/{id}/leave', [GroupController::class, 'leave']);
 });

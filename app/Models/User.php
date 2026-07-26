@@ -66,6 +66,11 @@ protected static function boot()
     return $this->hasMany(Experience::class);
 }
 
+public function groups()
+{
+    return $this->belongsToMany(Group::class, 'group_user')->withTimestamps();
+}
+
 
 
 
