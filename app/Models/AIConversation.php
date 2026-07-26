@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class AIConversation extends Model
 {
+    protected $table = 'ai_conversations';
+
     protected $fillable = [
         'user_id',
         'title',
