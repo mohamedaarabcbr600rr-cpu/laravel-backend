@@ -14,27 +14,80 @@ class AIController extends Controller
     /**
      * 🤖 AI Chat
      */
-    public function askAI(Request $request, AIService $ai)
+   public function askAI(Request $request, AIService $ai)
     {
-        $request->validate(['message' => 'required|string|max:2000']);
+        $request->validate([
+            'message' => 'required|string|max:2000',
+            'conversation_id' => 'nullable|integer|exists:ai_conversations,id',
+        ]);
 
         $lang = $this->detectLanguage(substr($request->message, 0, 1000));
 
         try {
-            $user = auth()->user();
+$user = auth()->user();
             $niveau = 'intermediaire';
             if ($user && $user->profile) {
                 $niveau = $user->profile->niveau ?? 'intermediaire';
+            }
+
+            // Guests (not logged in) keep the old stateless behavior — no persistence, no context memory
+            $conversation = null;
+            $contextTranscript = '';
+
+            if ($user) {
+                if ($request->conversation_id) {
+                    $conversation = \App\Models\AIConversation::where('id', $request->conversation_id)
+                        ->where('user_id', $user->id)
+                        ->first();
+                }
+                if (!$conversation) {
+                    $conversation = \App\Models\AIConversation::create([
+                        'user_id' => $user->id,
+                        'title' => null,
+                    ]);
+                }
+
+                // Build real context from the last 5 exchanges stored in DB (source of truth, not client-supplied)
+                $recentInteractions = $conversation->interactions()->latest()->take(5)->get()->reverse();
+                foreach ($recentInteractions as $interaction) {
+                    $contextTranscript .= "Student: {$interaction->input_text}\nAssistant: {$interaction->ai_response}\n";
+                }
             }
 
             $prompt = "
 You are an intelligent AI assistant.
 RULE: Respond STRICTLY in this language: {$lang}
 Student level: {$niveau}
-Question: {$request->message}
+" . ($contextTranscript ? "Conversation so far:\n{$contextTranscript}\n" : "") . "
+New question: {$request->message}
 ";
-            $reply = $ai->ask($prompt);
-            return response()->json(['success' => true, 'reply' => $reply], 200, [], JSON_UNESCAPED_UNICODE);
+          $reply = $ai->ask($prompt);
+
+            if ($user && $conversation) {
+                // Persist this exchange
+                \App\Models\AIInteraction::create([
+                    'user_id' => $user->id,
+                    'conversation_id' => $conversation->id,
+                    'type' => 'chat',
+                    'input_text' => $request->message,
+                    'ai_response' => $reply,
+                ]);
+
+                // Auto-title the conversation from its first message
+                if (empty($conversation->title)) {
+                    $conversation->update([
+                        'title' => mb_substr(trim($request->message), 0, 50),
+                    ]);
+                } else {
+                    $conversation->touch();
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'reply' => $reply,
+                'conversation_id' => $conversation?->id,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
 
         } catch (\Exception $e) {
             \Log::error('AI Chat error: ' . $e->getMessage());
@@ -387,6 +440,76 @@ Give:
             \Log::error('AI Coach error: ' . $e->getMessage());
             return response()->json(['coach' => '💪 Continuez à pratiquer régulièrement !'], 500);
         }
+    }
+
+    /**
+     * 📋 List conversations for the authenticated user
+     */
+    public function listConversations()
+    {
+        $user = auth()->user();
+        if (!$user) return response()->json(['error' => 'Unauthorized'], 401);
+
+        return response()->json(
+            $user->aiConversations()->select('id', 'title', 'created_at', 'updated_at')->get()
+        );
+    }
+
+    /**
+     * ➕ Create a new empty conversation
+     */
+    public function createConversation()
+    {
+        $user = auth()->user();
+        if (!$user) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $conversation = \App\Models\AIConversation::create([
+            'user_id' => $user->id,
+            'title' => null,
+        ]);
+
+        return response()->json($conversation, 201);
+    }
+
+    /**
+     * 📖 Get a conversation with its full message history
+     */
+    public function getConversation($id)
+    {
+        $user = auth()->user();
+        if (!$user) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $conversation = \App\Models\AIConversation::where('id', $id)
+            ->where('user_id', $user->id)
+            ->with('interactions')
+            ->first();
+
+        if (!$conversation) {
+            return response()->json(['error' => 'Conversation not found'], 404);
+        }
+
+        return response()->json($conversation);
+    }
+
+    /**
+     * 🗑️ Delete a conversation and its messages
+     */
+    public function deleteConversation($id)
+    {
+        $user = auth()->user();
+        if (!$user) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $conversation = \App\Models\AIConversation::where('id', $id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$conversation) {
+            return response()->json(['error' => 'Conversation not found'], 404);
+        }
+
+        $conversation->delete();
+
+        return response()->json(['success' => true]);
     }
 
     /**

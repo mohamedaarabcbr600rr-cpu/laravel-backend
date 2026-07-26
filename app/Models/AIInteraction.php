@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 class AIInteraction extends Model
 {
     protected $fillable = [
-        'user_id', 'type', 'input_text', 'ai_response', 'metadata'
+        'user_id', 'conversation_id', 'type', 'input_text', 'ai_response', 'metadata'
     ];
     
     protected $casts = [
@@ -20,5 +20,10 @@ class AIInteraction extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function conversation()
+    {
+        return $this->belongsTo(AIConversation::class, 'conversation_id');
     }
 }

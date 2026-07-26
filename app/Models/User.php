@@ -171,6 +171,11 @@ public function aiInteractions()
 {
     return $this->hasMany(AIInteraction::class);
 }
+
+public function aiConversations()
+{
+    return $this->hasMany(AIConversation::class)->orderBy('updated_at', 'desc');
+}
 public function qcmHistories()
 {
     return $this->hasMany(\App\Models\QCMHistory::class);

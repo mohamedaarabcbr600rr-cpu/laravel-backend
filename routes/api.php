@@ -370,6 +370,14 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 Route::middleware('auth:sanctum')->get('/ai-coach', [AIController::class, 'aiCoach']);
 
+// AI Conversations (chat history)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/ai-conversations', [AIController::class, 'listConversations']);
+    Route::post('/ai-conversations', [AIController::class, 'createConversation']);
+    Route::get('/ai-conversations/{id}', [AIController::class, 'getConversation']);
+    Route::delete('/ai-conversations/{id}', [AIController::class, 'deleteConversation']);
+});
+
 
 
 
