@@ -24,7 +24,16 @@ class AIController extends Controller
         $lang = $this->detectLanguage(substr($request->message, 0, 1000));
 
         try {
-$user = auth()->user();
+            // /ask-ai is a public route (no auth:sanctum middleware), so auth()->user()
+            // uses the default 'web' guard and never sees the Bearer token. Resolve it manually.
+            $user = null;
+            $bearerToken = $request->bearerToken();
+            if ($bearerToken) {
+                $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($bearerToken);
+                if ($accessToken) {
+                    $user = $accessToken->tokenable;
+                }
+            }
             $niveau = 'intermediaire';
             if ($user && $user->profile) {
                 $niveau = $user->profile->niveau ?? 'intermediaire';
