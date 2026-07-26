@@ -4,7 +4,10 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Group;
+use App\Models\GroupMessage;
+use App\Events\GroupMessageSent;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class GroupController extends Controller
 {
@@ -99,5 +102,66 @@ class GroupController extends Controller
         $group->users()->detach($user->id);
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Get all messages in a group (members only)
+     */
+    public function getMessages(Request $request, $id)
+    {
+        $user = $request->user();
+        $group = Group::findOrFail($id);
+
+        if (!$group->users()->where('users.id', $user->id)->exists()) {
+            return response()->json(['error' => 'Vous devez rejoindre ce groupe pour voir les messages'], 403);
+        }
+
+        $messages = GroupMessage::where('group_id', $id)
+            ->with('user')
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        return response()->json($messages);
+    }
+
+    /**
+     * Send a message in a group (members only)
+     */
+    public function sendMessage(Request $request, $id)
+    {
+        $request->validate([
+            'content' => 'nullable|string',
+            'file' => 'nullable|file|max:10240',
+        ]);
+
+        $user = $request->user();
+        $group = Group::findOrFail($id);
+
+        if (!$group->users()->where('users.id', $user->id)->exists()) {
+            return response()->json(['error' => 'Vous devez rejoindre ce groupe pour envoyer un message'], 403);
+        }
+
+        $filePath = null;
+        $fileType = null;
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $filePath = $file->store('group-messages', 'public');
+            $fileType = $file->getMimeType();
+        }
+
+        $message = GroupMessage::create([
+            'group_id' => $id,
+            'user_id' => $user->id,
+            'content' => $request->content,
+            'file_path' => $filePath,
+            'file_type' => $fileType,
+        ]);
+
+        $message->load('user');
+
+        broadcast(new GroupMessageSent($message))->toOthers();
+
+        return response()->json($message, 201);
     }
 }

@@ -464,4 +464,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/groups', [GroupController::class, 'store']);
     Route::post('/groups/{id}/join', [GroupController::class, 'join']);
     Route::post('/groups/{id}/leave', [GroupController::class, 'leave']);
+    Route::get('/groups/{id}/messages', [GroupController::class, 'getMessages']);
+    Route::post('/groups/{id}/messages', [GroupController::class, 'sendMessage']);
 });

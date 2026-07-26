@@ -32,6 +32,20 @@ Broadcast::channel('conversation.{id}', function ($user, $id) {
 
 /*
 |--------------------------------------------------------------------------
+| Group private channel
+|--------------------------------------------------------------------------
+*/
+
+Broadcast::channel('group.{id}', function ($user, $id) {
+    return \App\Models\Group::where('id', $id)
+        ->whereHas('users', function ($q) use ($user) {
+            $q->where('users.id', $user->id);
+        })
+        ->exists();
+});
+
+/*
+|--------------------------------------------------------------------------
 | Presence channel
 |--------------------------------------------------------------------------
 */
