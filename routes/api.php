@@ -449,22 +449,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
-//study material & focus session routes
 
-
-
-
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/study/upload', [AIStudyController::class, 'upload']);
-    Route::get('/study/generate-plan/{materialId}', [AIStudyController::class, 'generatePlan']);
-
-    Route::post('/focus/start', [AIStudyController::class, 'startSession']);
-    Route::get('/focus/current-task/{sessionId}', [AIStudyController::class, 'currentTask']);
-    Route::post('/focus/complete-task', [AIStudyController::class, 'completeTask']);
-    Route::get('/focus/review/{sessionId}', [AIStudyController::class, 'generateReview']);
-    Route::post('/focus/finalize/{sessionId}', [AIStudyController::class, 'finalizeSession']);
-    Route::get('/focus/history', [AIStudyController::class, 'history']);
-});
 
 // Comment routes (likes & replies)
 Route::middleware('auth:sanctum')->group(function () {
