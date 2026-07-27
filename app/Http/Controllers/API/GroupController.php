@@ -19,35 +19,59 @@ class GroupController extends Controller
         $user = $request->user();
 
         $groups = Group::withCount('users')->get()->map(function ($group) use ($user) {
-            return [
-                'id' => $group->id,
-                'name' => $group->name,
-                'description' => $group->description,
-                'cover_image' => $group->cover_image,
-                'members_count' => $group->users_count,
-                'is_member' => $group->users()->where('users.id', $user->id)->exists(),
-            ];
+            return $this->formatGroupSummary($group, $user);
         });
 
         return response()->json($groups);
     }
 
     /**
+     * Shared formatter: adds last message preview + unread count + membership status
+     */
+    private function formatGroupSummary(Group $group, $user)
+    {
+        $membership = $group->users()->where('users.id', $user->id)->first();
+        $isMember = $membership !== null;
+
+        $lastMessage = GroupMessage::where('group_id', $group->id)
+            ->with('user:id,name')
+            ->latest('created_at')
+            ->first();
+
+        $unreadCount = 0;
+        if ($isMember) {
+            $lastReadAt = $membership->pivot->last_read_at;
+            $unreadCount = GroupMessage::where('group_id', $group->id)
+                ->where('user_id', '!=', $user->id)
+                ->when($lastReadAt, fn ($q) => $q->where('created_at', '>', $lastReadAt))
+                ->count();
+        }
+
+        return [
+            'id' => $group->id,
+            'name' => $group->name,
+            'description' => $group->description,
+            'cover_image' => $group->cover_image,
+            'members_count' => $group->users_count ?? $group->users()->count(),
+            'is_member' => $isMember,
+            'last_message' => $lastMessage ? [
+                'content' => $lastMessage->content,
+                'user_name' => $lastMessage->user?->name,
+                'created_at' => $lastMessage->created_at?->toIso8601String(),
+            ] : null,
+            'unread_count' => $unreadCount,
+        ];
+    }
+
+    /**
      * Groups the current user has joined
      */
-    public function myGroups(Request $request)
+public function myGroups(Request $request)
     {
         $user = $request->user();
 
-        $groups = $user->groups()->withCount('users')->get()->map(function ($group) {
-            return [
-                'id' => $group->id,
-                'name' => $group->name,
-                'description' => $group->description,
-                'cover_image' => $group->cover_image,
-                'members_count' => $group->users_count,
-                'is_member' => true,
-            ];
+        $groups = $user->groups()->withCount('users')->get()->map(function ($group) use ($user) {
+            return $this->formatGroupSummary($group, $user);
         });
 
         return response()->json($groups);
@@ -104,6 +128,23 @@ class GroupController extends Controller
         return response()->json(['success' => true]);
     }
 
+   /**
+     * List members of a group (for avatar stack in header)
+     */
+    public function members(Request $request, $id)
+    {
+        $user = $request->user();
+        $group = Group::findOrFail($id);
+
+        if (!$group->users()->where('users.id', $user->id)->exists()) {
+            return response()->json(['error' => 'Vous devez rejoindre ce groupe'], 403);
+        }
+
+        $members = $group->users()->select('users.id', 'users.name', 'users.profile_pic')->get();
+
+        return response()->json($members);
+    }
+
     /**
      * Get all messages in a group (members only)
      */
@@ -120,6 +161,8 @@ class GroupController extends Controller
             ->with('user')
             ->orderBy('created_at', 'asc')
             ->get();
+
+        $group->users()->updateExistingPivot($user->id, ['last_read_at' => now()]);
 
         return response()->json($messages);
     }

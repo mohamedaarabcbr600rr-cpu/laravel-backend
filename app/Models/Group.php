@@ -13,9 +13,14 @@ class Group extends Model
     ];
 
     public function users()
-    {
-        return $this->belongsToMany(User::class, 'group_user')->withTimestamps();
-    }
+{
+    return $this->belongsToMany(User::class, 'group_user')->withTimestamps()->withPivot('last_read_at');
+}
+
+public function messages()
+{
+    return $this->hasMany(GroupMessage::class, 'group_id');
+}
 
     public function creator()
     {
