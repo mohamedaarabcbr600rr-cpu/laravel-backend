@@ -462,9 +462,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/groups', [GroupController::class, 'index']);
     Route::get('/my-groups', [GroupController::class, 'myGroups']);
     Route::post('/groups', [GroupController::class, 'store']);
-    Route::post('/groups/{id}/join', [GroupController::class, 'join']);
+   Route::post('/groups/{id}/join', [GroupController::class, 'join']);
     Route::post('/groups/{id}/leave', [GroupController::class, 'leave']);
+    Route::delete('/groups/{id}', [GroupController::class, 'destroy']);
     Route::get('/groups/{id}/messages', [GroupController::class, 'getMessages']);
     Route::post('/groups/{id}/messages', [GroupController::class, 'sendMessage']);
     Route::get('/groups/{id}/members', [GroupController::class, 'members']);
+    Route::post('/groups/join-by-token/{token}', [GroupController::class, 'joinByToken']);
 });

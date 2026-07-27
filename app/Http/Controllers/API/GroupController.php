@@ -54,6 +54,8 @@ class GroupController extends Controller
             'cover_image' => $group->cover_image,
             'members_count' => $group->users_count ?? $group->users()->count(),
             'is_member' => $isMember,
+            'is_admin' => (int) $group->created_by === (int) $user->id,
+            'invite_token' => $isMember ? $group->invite_token : null,
             'last_message' => $lastMessage ? [
                 'content' => $lastMessage->content,
                 'user_name' => $lastMessage->user?->name,
@@ -85,15 +87,21 @@ public function myGroups(Request $request)
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'cover_image' => 'nullable|string',
+            'cover_image' => 'nullable|image|max:5120',
         ]);
 
         $user = $request->user();
 
+        $coverPath = null;
+        if ($request->hasFile('cover_image')) {
+            $coverPath = $request->file('cover_image')->store('group-covers', 'public');
+            $coverPath = '/storage/' . $coverPath;
+        }
+
         $group = Group::create([
             'name' => $request->name,
             'description' => $request->description,
-            'cover_image' => $request->cover_image,
+            'cover_image' => $coverPath,
             'created_by' => $user->id,
         ]);
 
@@ -145,6 +153,40 @@ public function myGroups(Request $request)
         return response()->json($members);
     }
 
+   /**
+     * Join a group via its invite link/token
+     */
+    public function joinByToken(Request $request, $token)
+    {
+        $user = $request->user();
+        $group = Group::where('invite_token', $token)->first();
+
+        if (!$group) {
+            return response()->json(['error' => 'Lien d\'invitation invalide'], 404);
+        }
+
+        $group->users()->syncWithoutDetaching([$user->id]);
+
+        return response()->json($this->formatGroupSummary($group->fresh(), $user));
+    }
+
+    /**
+     * Delete a group (creator/admin only)
+     */
+    public function destroy(Request $request, $id)
+    {
+        $user = $request->user();
+        $group = Group::findOrFail($id);
+
+        if ((int) $group->created_by !== (int) $user->id) {
+            return response()->json(['error' => 'Seul le créateur du groupe peut le supprimer'], 403);
+        }
+
+        $group->delete();
+
+        return response()->json(['success' => true]);
+    }
+
     /**
      * Get all messages in a group (members only)
      */
@@ -170,11 +212,11 @@ public function myGroups(Request $request)
     /**
      * Send a message in a group (members only)
      */
-    public function sendMessage(Request $request, $id)
+public function sendMessage(Request $request, $id)
     {
         $request->validate([
             'content' => 'nullable|string',
-            'file' => 'nullable|file|max:10240',
+            'file' => 'nullable|file|max:51200', // up to 50MB, to allow short videos
         ]);
 
         $user = $request->user();

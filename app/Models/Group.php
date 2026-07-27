@@ -12,6 +12,20 @@ class Group extends Model
         'name', 'description', 'cover_image', 'created_by',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($group) {
+            if (empty($group->invite_token)) {
+                do {
+                    $token = \Illuminate\Support\Str::random(16);
+                } while (self::where('invite_token', $token)->exists());
+                $group->invite_token = $token;
+            }
+        });
+    }
+
     public function users()
 {
     return $this->belongsToMany(User::class, 'group_user')->withTimestamps()->withPivot('last_read_at');
