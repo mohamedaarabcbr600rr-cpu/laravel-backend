@@ -467,6 +467,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/groups/{id}', [GroupController::class, 'destroy']);
     Route::get('/groups/{id}/messages', [GroupController::class, 'getMessages']);
     Route::post('/groups/{id}/messages', [GroupController::class, 'sendMessage']);
+    Route::delete('/group-messages/{messageId}', [GroupController::class, 'deleteMessage']);
     Route::get('/groups/{id}/members', [GroupController::class, 'members']);
     Route::post('/groups/join-by-token/{token}', [GroupController::class, 'joinByToken']);
 });

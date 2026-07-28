@@ -200,7 +200,7 @@ public function myGroups(Request $request)
         }
 
         $messages = GroupMessage::where('group_id', $id)
-            ->with('user')
+            ->with(['user', 'replyTo.user'])
             ->orderBy('created_at', 'asc')
             ->get();
 
@@ -208,7 +208,7 @@ public function myGroups(Request $request)
 
         return response()->json($messages);
     }
-
+    
     /**
      * Send a message in a group (members only)
      */
@@ -217,6 +217,7 @@ public function sendMessage(Request $request, $id)
         $request->validate([
             'content' => 'nullable|string',
             'file' => 'nullable|file|max:51200', // up to 50MB, to allow short videos
+            'reply_to_id' => 'nullable|exists:group_messages,id',
         ]);
 
         $user = $request->user();
@@ -241,12 +242,33 @@ public function sendMessage(Request $request, $id)
             'content' => $request->content,
             'file_path' => $filePath,
             'file_type' => $fileType,
+            'reply_to_id' => $request->reply_to_id,
         ]);
 
-        $message->load('user');
+        $message->load(['user', 'replyTo.user']);
 
         broadcast(new GroupMessageSent($message))->toOthers();
 
         return response()->json($message, 201);
+    }
+
+    /**
+     * Delete a group message for everyone (soft — keeps history, shows placeholder)
+     */
+    public function deleteMessage(Request $request, $messageId)
+    {
+        $user = $request->user();
+        $message = GroupMessage::findOrFail($messageId);
+
+        if ((int) $message->user_id !== (int) $user->id) {
+            return response()->json(['error' => 'Vous ne pouvez supprimer que vos propres messages'], 403);
+        }
+
+        $message->update(['deleted_for_everyone_at' => now()]);
+        $message->load(['user', 'replyTo.user']);
+
+        broadcast(new GroupMessageSent($message))->toOthers();
+
+        return response()->json($message);
     }
 }
