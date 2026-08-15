@@ -194,4 +194,20 @@ $experience->load(['user:id,name,profile_pic,referral_count', 'likes', 'medias']
 
         return response()->json($experiences);
     }
+
+    // ✅ SEO : liste légère (id + date) de tous les posts, pour générer le sitemap au build
+    public function sitemapList()
+    {
+        $experiences = Experience::orderBy('created_at', 'desc')
+            ->get(['id', 'created_at', 'updated_at']);
+
+        return response()->json(
+            $experiences->map(function ($exp) {
+                return [
+                    'id'         => $exp->id,
+                    'updated_at' => ($exp->updated_at ?? $exp->created_at)->toAtomString(),
+                ];
+            })
+        );
+    }
 }

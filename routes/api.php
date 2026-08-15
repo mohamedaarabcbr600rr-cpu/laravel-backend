@@ -122,6 +122,7 @@ Route::post('/reset-password', function (Request $request) {
 });
 Route::get('/experiences', [ExperienceController::class,'index']);
 Route::get('/experiences/{id}', [ExperienceController::class, 'show']); 
+Route::get('/sitemap-posts', [ExperienceController::class, 'sitemapList']);
 
 Route::get('/challenge/participants', function () {
     $since = now()->subDays(15);
