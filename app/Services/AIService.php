@@ -108,7 +108,7 @@ class AIService
             Log::info('Envoi PDF à Gemini 2.0 Flash...');
             
             $response = Http::timeout(180)->post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
+                            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $this->geminiApiKey,
                 [
                     "contents" => [
                         [
@@ -239,7 +239,7 @@ class AIService
                 Log::info('Envoi image à Gemini...');
                 
                 $response = Http::timeout(180)->post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
+                                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $this->geminiApiKey,
                     [
                         "contents" => [
                             [
@@ -327,7 +327,7 @@ class AIService
             'Authorization' => 'Bearer ' . $this->groqApiKey,
             'Content-Type' => 'application/json',
         ])->timeout(120)->post('https://api.groq.com/openai/v1/chat/completions', [
-            "model" => "llama-3.3-70b-versatile",
+                        "model" => "openai/gpt-oss-120b",
             "messages" => [
                 [
                     "role" => "system",
@@ -352,7 +352,7 @@ class AIService
             'Authorization' => 'Bearer ' . $this->openRouterApiKey,
             'Content-Type' => 'application/json',
         ])->timeout(120)->post('https://openrouter.ai/api/v1/chat/completions', [
-            "model" => "mistralai/mistral-7b-instruct:free",
+                        "model" => "openrouter/free",
             "messages" => [
                 ["role" => "system", "content" => "You are an AI assistant. Follow the language in the user prompt."],
                 ["role" => "user", "content" => $prompt]
@@ -371,7 +371,7 @@ class AIService
     private function askGemini($prompt)
     {
         $response = Http::timeout(120)->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" . $this->geminiApiKey,
+                        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $this->geminiApiKey,
             [
                 "contents" => [
                     [
@@ -412,7 +412,7 @@ class AIService
                 $response = Http::withHeaders([
                     'Authorization' => 'Bearer ' . $this->groqApiKey,
                 ])->timeout(120)->post('https://api.groq.com/openai/v1/chat/completions', [
-                    "model" => "llama-3.3-70b-versatile",
+                                        "model" => "openai/gpt-oss-120b",
                     "messages" => $messages,
                     "temperature" => 0.7
                 ]);
