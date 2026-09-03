@@ -9,14 +9,10 @@ use App\Models\User;
 use App\Events\MessageSent;
 use App\Events\TypingIndicator;
 use App\Events\MessageRead;
-
+use Illuminate\Support\Facades\Cache;
 class MessageController extends Controller
 {
-    /**
-     * Typing indicator storage (in-memory)
-     * Note: Use Redis/database for production with multiple servers
-     */
-    private static $typing = [];
+  
 
     /*
     |--------------------------------------------------------------------------
@@ -198,6 +194,7 @@ public function getMessages($conversationId)
      * Set typing status
      * Route: POST /api/messages/{id}/typing
      */
+    // AFTER
     public function setTyping(Request $request, $conversationId)
     {
         $request->validate([
@@ -205,12 +202,12 @@ public function getMessages($conversationId)
             'is_typing' => 'required|boolean'
         ]);
 
-        self::$typing[$conversationId] = [
+        Cache::put("typing:{$conversationId}", [
             'user_id' => $request->user_id,
             'is_typing' => $request->is_typing
-        ];
+        ], now()->addSeconds(10));
 
-        // 🔥 Realtime typing indicator via Reverb
+        // 🔥 Realtime typing indicator via Reverb (now queued, see TypingIndicator event)
         broadcast(new TypingIndicator(
             (int) $conversationId,
             (int) $request->user_id,
@@ -224,13 +221,14 @@ public function getMessages($conversationId)
      * Get typing status
      * Route: GET /api/messages/{id}/typing
      */
+    // AFTER
     public function getTyping($conversationId)
     {
         return response()->json(
-            self::$typing[$conversationId] ?? [
+            Cache::get("typing:{$conversationId}", [
                 'is_typing' => false,
                 'user_id' => null
-            ]
+            ])
         );
     }
 

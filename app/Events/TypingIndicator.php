@@ -14,7 +14,10 @@ use Illuminate\Queue\SerializesModels;
  * Channel: private-conversation.{id}
  * Event:   .typing
  */
-class TypingIndicator implements ShouldBroadcast
+// AFTER
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class TypingIndicator implements ShouldBroadcast, ShouldQueue
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
